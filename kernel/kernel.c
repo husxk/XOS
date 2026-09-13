@@ -1,10 +1,16 @@
 /* Freestanding kernel — entered from start_kernel.asm. */
 
+#include "drivers/vga/vga.h"
+#include "log/kprint.h"
+
+static const char msg[] = "Hello from C kernel!";
+
+
 void kernel_main(void)
 {
-    volatile unsigned short *vga = (unsigned short *)0xb8000;
-    const char *msg = "Hello from C kernel!";
+    vga_init();
 
-    for (unsigned i = 0; msg[i]; ++i)
-        vga[i] = (unsigned short)(msg[i] | 0x0f00);
+    kprint(msg);
+    kprint("\n");
+    kprint_hexdump(msg, sizeof(msg) - 1);
 }

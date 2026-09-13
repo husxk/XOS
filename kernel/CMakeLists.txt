@@ -14,7 +14,9 @@ add_custom_command(
 
 add_custom_target(start_kernel_o DEPENDS "${START_O}")
 
-add_executable(kernel_elf "${START_O}" kernel.c)
+add_executable(kernel_elf "${START_O}" kernel.c drivers/vga/vga.c mem/kmem.c log/kprint.c)
+
+target_include_directories(kernel_elf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_dependencies(kernel_elf start_kernel_o)
 set_target_properties(kernel_elf PROPERTIES
