@@ -32,9 +32,10 @@ set(OS_IMAGE "${CMAKE_BINARY_DIR}/os.img")
 add_custom_command(
     OUTPUT "${OS_IMAGE}"
     COMMAND ${CMAKE_COMMAND} -E cat "${BOOT_BIN}" "${KERNEL_BIN}" > "${OS_IMAGE}"
-    DEPENDS boot_bin kernel_bin
+    DEPENDS "${BOOT_BIN}" "${KERNEL_BIN}"
     COMMENT "Creating os.img (boot + kernel)"
     VERBATIM
 )
 
 add_custom_target(os_image ALL DEPENDS "${OS_IMAGE}")
+add_dependencies(os_image boot_bin kernel_bin)
