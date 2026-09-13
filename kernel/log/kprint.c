@@ -41,6 +41,11 @@ static void kprint_hexdump_line(const char *hex_part, const char *ascii_part)
     vga_putchar('\n');
 }
 
+void kprint_init(void)
+{
+    vga_init();
+}
+
 void kprint(const char *str)
 {
     vga_puts(str);
