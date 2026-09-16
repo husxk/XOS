@@ -1,6 +1,7 @@
 #include "cpu/isr.h"
 
 #include "cpu/idt.h"
+#include "cpu/irq.h"
 #include "cpu/pic.h"
 #include "log/kprint.h"
 
@@ -146,6 +147,14 @@ void isr_install(unsigned char vector, isr_handler_fn handler)
         return;
 
     handlers[vector] = handler;
+}
+
+void isr_install_irq(unsigned char irq, isr_handler_fn handler)
+{
+    if (irq >= PIC_IRQ_COUNT || handler == 0)
+        return;
+
+    isr_install(irq_vector(irq), handler);
 }
 
 void isr_dispatch(interrupt_frame_t *frame)

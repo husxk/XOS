@@ -24,5 +24,6 @@ void kernel_main(void)
 
     kprint(msg);
     kprint("\n");
-    kprint_hexdump(msg, sizeof(msg) - 1);
+
+    while(true);
 }

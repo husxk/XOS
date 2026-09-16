@@ -31,3 +31,5 @@ void isr_init(void);
 void isr_dispatch(interrupt_frame_t *frame);
 
 void isr_install(unsigned char vector, isr_handler_fn handler);
+
+void isr_install_irq(unsigned char irq, isr_handler_fn handler);
