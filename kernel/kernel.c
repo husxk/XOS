@@ -3,6 +3,7 @@
 #include "cpu/idt.h"
 #include "cpu/isr.h"
 #include "cpu/pic.h"
+#include "drivers/keyboard/keyboard.h"
 #include "log/kprint.h"
 
 static const char msg[] = "Hello from kernel!";
@@ -14,6 +15,7 @@ static void kernel_init(void)
     idt_init();
     isr_init();
     pic_init();
+    keyboard_init();
 
     cpu_enable_interrupts();
 }
@@ -25,5 +27,5 @@ void kernel_main(void)
     kprint(msg);
     kprint("\n");
 
-    while(true);
+    while(1);
 }

@@ -26,7 +26,7 @@ add_custom_command(
 
 add_custom_target(isr_o DEPENDS "${ISR_O}")
 
-add_executable(kernel_elf "${START_O}" "${ISR_O}" kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/vga/vga.c mem/kmem.c log/kprint.c)
+add_executable(kernel_elf "${START_O}" "${ISR_O}" kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/keyboard/keyboard.c drivers/vga/vga.c mem/kmem.c log/kprint.c)
 
 target_include_directories(kernel_elf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
