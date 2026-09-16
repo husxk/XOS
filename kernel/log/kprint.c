@@ -51,6 +51,25 @@ void kprint(const char *str)
     vga_puts(str);
 }
 
+void kprint_hex32(unsigned int value)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char buf[11];
+    unsigned int i;
+
+    buf[0] = '0';
+    buf[1] = 'x';
+
+    for (i = 0; i < 8; i++)
+    {
+        unsigned int shift = (7 - i) * 4;
+        buf[2 + i] = hex[(value >> shift) & 0xf];
+    }
+
+    buf[10] = '\0';
+    kprint(buf);
+}
+
 void kprint_hexdump(const void *addr, unsigned long size)
 {
     const char hex_chars[] =
