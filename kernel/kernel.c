@@ -30,9 +30,10 @@ void kernel_main(void)
 {
     kernel_init();
 
-    kprint(msg);
-    kprint("\n");
+    kputs(msg);
+    kputs("\n");
     phys_map_print();
+    kprint_hexdump(msg, sizeof(msg) - 1);
 
     for (;;)
     {
@@ -40,8 +41,6 @@ void kernel_main(void)
 
         ksleep_ms((time_t)TICK_REPORT_MS);
         ticks = ktimer_ticks();
-        kprint("ticks ");
-        kprint_hex32(ticks);
-        kprint("\n");
+        kprint("ticks %u\n", ticks);
     }
 }
