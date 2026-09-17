@@ -16,20 +16,15 @@ cmake --build "${ROOT}/${BUILD_DIR}" "$@"
 OS_IMAGE="${ROOT}/${BUILD_DIR}/os.img"
 KERNEL_ELF="${ROOT}/${BUILD_DIR}/kernel/kernel.elf"
 KERNEL_BIN="${ROOT}/${BUILD_DIR}/kernel/kernel.bin"
-BOOT_READ_SECTORS=32
-
 echo -ne "\n\nBuilt: ${OS_IMAGE}\n"
 
 if [[ -f "${KERNEL_BIN}" ]]; then
   bytes=$(stat -c%s "${KERNEL_BIN}")
   sectors=$(( (bytes + 511) / 512 ))
-  boot_bytes=$((BOOT_READ_SECTORS * 512))
+  boot_bytes=$((sectors * 512))
   echo "Kernel image: ${bytes} bytes, ${sectors} disk sector(s) (512 B each)"
   echo "  load address: 0x1000 (kernel starts at disk sector 2)"
-  echo "  boot loader reads: ${BOOT_READ_SECTORS} sectors (${boot_bytes} bytes) from sector 2"
-  if (( bytes > boot_bytes )); then
-    echo "  WARNING: kernel.bin exceeds boot.asm read count — increase AL in boot.asm" >&2
-  fi
+  echo "  boot loader reads: ${sectors} sector(s) (${boot_bytes} bytes) from sector 2"
 fi
 
 echo -ne "\n"

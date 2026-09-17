@@ -12,9 +12,14 @@ mov bp, 0x8000
 mov sp, bp                   ; stack below boot sector (0x7C00), grows down
 
 ; --- load kernel from disk (sector 2+, right after this 512-byte sector) ---
+; KERNEL_SECTORS: set at build from kernel.bin size (see boot/CMakeLists.txt).
+
+%ifndef KERNEL_SECTORS
+    %define KERNEL_SECTORS 0x20
+%endif
 
 mov ah, 0x02                 ; INT 13h: read sectors
-mov al, 0x20                 ; AL = number of sectors to read
+mov al, KERNEL_SECTORS       ; AL = number of sectors to read
 mov ch, 0x00                 ; cylinder 0
 mov dh, 0x00                 ; head 0
 mov cl, 0x02                 ; start at sector 2 (sector 1 is this boot block)
