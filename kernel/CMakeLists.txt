@@ -26,7 +26,7 @@ add_custom_command(
 
 add_custom_target(isr_o DEPENDS "${ISR_O}")
 
-add_executable(kernel_elf "${START_O}" "${ISR_O}" kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/keyboard/keyboard.c drivers/vga/vga.c mem/kmem.c log/kprint.c)
+add_executable(kernel_elf "${START_O}" "${ISR_O}" kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/timer/pit.c timer/timer.c drivers/keyboard/keyboard.c drivers/vga/vga.c mem/kmem.c log/kprint.c)
 
 target_include_directories(kernel_elf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -46,6 +46,16 @@ target_link_options(kernel_elf PRIVATE
     -nostdlib
     -Wl,--build-id=none
 )
+
+execute_process(
+    COMMAND "${CMAKE_C_COMPILER}" -print-libgcc-file-name
+    OUTPUT_VARIABLE XOS_LIBGCC
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(NOT EXISTS "${XOS_LIBGCC}")
+    message(FATAL_ERROR "libgcc not found (compiler -print-libgcc-file-name): ${XOS_LIBGCC}")
+endif()
+target_link_libraries(kernel_elf PRIVATE "${XOS_LIBGCC}")
 
 add_custom_command(
     OUTPUT "${KERNEL_BIN}"
