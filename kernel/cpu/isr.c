@@ -55,74 +55,41 @@ static void print_exception(unsigned int vector)
 {
     if (vector < CPU_EXCEPTION_COUNT)
     {
-        kprint(cpu_exception[vector].full);
-
-        kprint(" (");
-        kprint(cpu_exception[vector].abbr);
-        kprint(")");
-
+        kprint("%s (%s)", cpu_exception[vector].full, cpu_exception[vector].abbr);
         return;
     }
 
     if (vector >= PIC_IRQ_BASE && vector < PIC_IRQ_BASE + PIC_IRQ_COUNT)
     {
-        kprint("Hardware IRQ ");
-        kprint_hex32(vector - PIC_IRQ_BASE);
+        /* Hex keeps the panic dump uniform; %u would read better for 0-15. */
+        kprint("Hardware IRQ 0x%08x", vector - PIC_IRQ_BASE);
         return;
     }
 
-    kprint("Interrupt");
+    kputs("Interrupt");
 }
 
 static void kernel_panic(interrupt_frame_t *frame)
 {
     unsigned int cr2;
 
-    kprint("\n*** KERNEL PANIC ***\n");
+    kputs("\n*** KERNEL PANIC ***\n");
 
-    kprint("vector ");
-    kprint_hex32(frame->int_no);
-    kprint(" ");
+    kprint("vector 0x%08x ", frame->int_no);
 
     print_exception(frame->int_no);
-    kprint("\n");
+    kputs("\n");
 
-    kprint("err_code ");
-    kprint_hex32(frame->err_code);
-    kprint("\n");
-
-    kprint("eip ");
-    kprint_hex32(frame->eip);
-
-    kprint(" cs ");
-    kprint_hex32(frame->cs);
-
-    kprint(" eflags ");
-    kprint_hex32(frame->eflags);
-
-    kprint("\n");
-
-    kprint("eax ");
-    kprint_hex32(frame->eax);
-
-    kprint(" ebx ");
-    kprint_hex32(frame->ebx);
-
-    kprint(" ecx ");
-    kprint_hex32(frame->ecx);
-
-    kprint(" edx ");
-    kprint_hex32(frame->edx);
-
-    kprint("\n");
+    kprint("err_code 0x%08x\n", frame->err_code);
+    kprint("eip 0x%08x cs 0x%08x eflags 0x%08x\n", frame->eip, frame->cs, frame->eflags);
+    kprint("eax 0x%08x ebx 0x%08x ecx 0x%08x edx 0x%08x\n",
+           frame->eax, frame->ebx, frame->ecx, frame->edx);
 
     if (frame->int_no == 14)
     {
         __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
 
-        kprint("cr2 ");
-        kprint_hex32(cr2);
-        kprint("\n");
+        kprint("cr2 0x%08x\n", cr2);
     }
 
     for (;;)

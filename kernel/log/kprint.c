@@ -1,28 +1,66 @@
 #include "log/kprint.h"
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "drivers/vga/vga.h"
 #include "mem/kmem.h"
 
-static void kprint_dec_unsigned(unsigned long value)
+#define KPRINT_WIDTH_MAX 256
+
+enum kprint_state
 {
-    char buf[21];
-    unsigned int i = 20;
+    KPRINT_STATE_NORMAL,
+    KPRINT_STATE_PERCENT,
+    KPRINT_STATE_WIDTH,
+    KPRINT_STATE_LENGTH,
+};
 
-    buf[i] = '\0';
-    if (value == 0)
+static void kprint_spec_literal(const char *start, const char *end)
+{
+    const char *p;
+
+    for (p = start; p <= end; p++)
+        vga_putchar(*p);
+}
+
+/* Argument order: value, base, upper, negative, width, pad. */
+static void kprint_unsigned(uint64_t value, unsigned int base, bool upper,
+                            bool negative, unsigned int width, char pad)
+{
+    static const char lower_digits[] = "0123456789abcdef";
+    static const char upper_digits[] = "0123456789ABCDEF";
+    const char *digits = upper ? upper_digits : lower_digits;
+    char buf[sizeof(uint64_t) * 8];
+    unsigned int len = 0;
+    unsigned int total;
+
+    do
     {
-        vga_putchar('0');
-        return;
+        buf[len] = digits[value % base];
+        len++;
+        value /= base;
+    } while (value > 0);
+
+    total = negative ? len + 1 : len;
+
+    if (negative && pad == '0')
+        vga_putchar('-');
+
+    while (width > total)
+    {
+        vga_putchar(pad);
+        width--;
     }
 
-    while (value > 0)
-    {
-        i--;
-        buf[i] = (char)('0' + (value % 10));
-        value /= 10;
-    }
+    if (negative && pad != '0')
+        vga_putchar('-');
 
-    vga_puts(buf + i);
+    while (len > 0)
+    {
+        len--;
+        vga_putchar(buf[len]);
+    }
 }
 
 static void kprint_hexdump_line(const char *hex_part, const char *ascii_part)
@@ -46,28 +84,177 @@ void kprint_init(void)
     vga_init();
 }
 
-void kprint(const char *str)
+void kputs(const char *str)
 {
     vga_puts(str);
 }
 
-void kprint_hex32(unsigned int value)
+void kprint(const char *fmt, ...)
 {
-    static const char hex[] = "0123456789ABCDEF";
-    char buf[11];
-    unsigned int i;
+    va_list ap;
 
-    buf[0] = '0';
-    buf[1] = 'x';
+    va_start(ap, fmt);
+    kvprint(fmt, ap);
+    va_end(ap);
+}
 
-    for (i = 0; i < 8; i++)
+void kvprint(const char *fmt, va_list ap)
+{
+    enum kprint_state state = KPRINT_STATE_NORMAL;
+    const char *spec_start = 0;
+    unsigned int width = 0;
+    char pad = ' ';
+    const char *s;
+    unsigned long len;
+    unsigned int base;
+    uint64_t value;
+    unsigned long magnitude;
+    long signed_value;
+    bool negative;
+    bool is_long = false;
+    char ch;
+
+    while (*fmt != '\0')
     {
-        unsigned int shift = (7 - i) * 4;
-        buf[2 + i] = hex[(value >> shift) & 0xf];
+        char c = *fmt;
+
+        switch (state)
+        {
+            case KPRINT_STATE_NORMAL:
+                if (c == '%')
+                {
+                    spec_start = fmt;
+                    width = 0;
+                    pad = ' ';
+                    is_long = false;
+                    state = KPRINT_STATE_PERCENT;
+                }
+                else
+                {
+                    vga_putchar(c);
+                }
+                break;
+
+            case KPRINT_STATE_WIDTH:
+                if (c >= '0' && c <= '9')
+                {
+                    unsigned int digit = (unsigned int)(c - '0');
+
+                    if (width > (KPRINT_WIDTH_MAX - digit) / 10)
+                        width = KPRINT_WIDTH_MAX;
+                    else
+                        width = width * 10 + digit;
+                    break;
+                }
+
+                state = KPRINT_STATE_PERCENT;
+                continue;
+
+            case KPRINT_STATE_LENGTH:
+                if (c == 'l' || c == 'z')
+                {
+                    kprint_spec_literal(spec_start, fmt);
+                    state = KPRINT_STATE_NORMAL;
+                    break;
+                }
+
+                is_long = true;
+                state = KPRINT_STATE_PERCENT;
+                continue;
+
+            case KPRINT_STATE_PERCENT:
+                if (c == 'l' || c == 'z')
+                {
+                    state = KPRINT_STATE_LENGTH;
+                    break;
+                }
+
+                if (c == '0')
+                {
+                    pad = '0';
+                    state = KPRINT_STATE_WIDTH;
+                    break;
+                }
+
+                if (c >= '1' && c <= '9')
+                {
+                    width = (unsigned int)(c - '0');
+                    state = KPRINT_STATE_WIDTH;
+                    break;
+                }
+
+                switch (c)
+                {
+                    case '%':
+                        vga_putchar('%');
+                        break;
+
+                    case 'c':
+                        ch = (char)va_arg(ap, int);
+                        while (width > 1)
+                        {
+                            vga_putchar(' ');
+                            width--;
+                        }
+                        vga_putchar(ch);
+                        break;
+
+                    case 's':
+                        s = va_arg(ap, const char *);
+                        if (s == 0)
+                            s = "(null)";
+
+                        len = kstrlen(s);
+                        while (width > len)
+                        {
+                            vga_putchar(' ');
+                            width--;
+                        }
+                        vga_puts(s);
+                        break;
+
+                    case 'u':
+                    case 'x':
+                    case 'X':
+                        base = (c == 'u') ? 10 : 16;
+                        value = is_long ? (uint64_t)va_arg(ap, unsigned long)
+                                        : (uint64_t)va_arg(ap, unsigned int);
+                        kprint_unsigned(value, base, (c == 'X'), false, width, pad);
+                        break;
+
+                    case 'd':
+                    case 'i':
+                        signed_value = is_long ? va_arg(ap, long) : (long)va_arg(ap, int);
+                        negative = signed_value < 0;
+                        magnitude = (unsigned long)signed_value;
+                        if (negative)
+                            magnitude = 0ul - magnitude;
+
+                        kprint_unsigned(magnitude, 10, false, negative, width, pad);
+                        break;
+
+                    /* Unlike printf, %p always uses the full pointer width and
+                       ignores the format's own width and padding. */
+                    case 'p':
+                        value = (uint64_t)(uintptr_t)va_arg(ap, const void *);
+                        vga_puts("0x");
+                        kprint_unsigned(value, 16, false, false, 2 * sizeof(void *), '0');
+                        break;
+
+                    default:
+                        kprint_spec_literal(spec_start, fmt);
+                        break;
+                }
+
+                state = KPRINT_STATE_NORMAL;
+                break;
+        }
+
+        fmt++;
     }
 
-    buf[10] = '\0';
-    kprint(buf);
+    if (state != KPRINT_STATE_NORMAL)
+        vga_puts(spec_start);
 }
 
 void kprint_hexdump(const void *addr, unsigned long size)
@@ -89,9 +276,9 @@ void kprint_hexdump(const void *addr, unsigned long size)
 
     data = addr;
 
-    kprint("hexdump len ");
-    kprint_dec_unsigned(size);
-    kprint("\n");
+    kputs("hexdump len ");
+    kprint_unsigned(size, 10, false, false, 0, ' ');
+    kputs("\n");
 
     kmemset(dumpdata, 0, 16 * 3);
     kmemset(dumpdata2, 0, 17);

@@ -22,7 +22,7 @@ void kernel_main(void)
 {
     kernel_init();
 
-    kprint(msg);
-    kprint("\n");
+    kputs(msg);
+    kputs("\n");
     kprint_hexdump(msg, sizeof(msg) - 1);
 }

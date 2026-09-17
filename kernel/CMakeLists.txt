@@ -40,12 +40,14 @@ target_compile_options(kernel_elf PRIVATE
     -ffreestanding
     -mgeneral-regs-only
     -mno-red-zone
+    -Wformat
 )
 target_link_options(kernel_elf PRIVATE
     -T "${LINKER_SCRIPT}"
     -nostdlib
     -Wl,--build-id=none
 )
+target_link_libraries(kernel_elf PRIVATE gcc)
 
 add_custom_command(
     OUTPUT "${KERNEL_BIN}"
