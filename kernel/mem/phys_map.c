@@ -159,7 +159,7 @@ void phys_map_print(void)
 
     if (region_count == 0)
     {
-        kprint("phys map: (none — multiboot2_info missing or no mmap tag)\n");
+        kprint("phys map: (none - multiboot2_info missing or no mmap tag)\n");
         return;
     }
 
@@ -171,10 +171,7 @@ void phys_map_print(void)
         kprint_hex64(regions[i].base);
         kprint(" + ");
         kprint_hex64(regions[i].length);
-        kprint(" type ");
-        kprint_hex32(regions[i].type);
-        kprint(" ");
-        kprint(phys_map_type_name(regions[i].type));
+        kprint(" type 0x%08x %s", regions[i].type, phys_map_type_name(regions[i].type));
         phys_map_print_size(regions[i].length);
         kprint("\n");
     }

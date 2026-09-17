@@ -18,9 +18,7 @@ static void keyboard_isr(interrupt_frame_t *frame)
     scancode = io_inb(KBD_DATA_PORT);
     irq_ack(KBD_IRQ);
 
-    kprint("key ");
-    kprint_hex32(scancode);
-    kprint("\n");
+    kprint("key 0x%02x\n", scancode);
 }
 
 void keyboard_init(void)

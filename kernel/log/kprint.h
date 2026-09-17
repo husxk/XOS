@@ -2,9 +2,9 @@
 
 void kprint_init(void);
 
-void kprint(const char *str);
+void kputs(const char *str);
 
-void kprint_hex32(unsigned int value);
+void kprint(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 void kprint_hex64(unsigned long long value);
 
