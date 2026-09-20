@@ -1,3 +1,6 @@
+; Legacy BIOS boot sector — loads kernel.bin from a raw os.img (sector 2+).
+; Superseded by GRUB + Multiboot2 (boot/grub/grub.cfg). Kept for reference / os.img builds.
+
 [org 0x7c00]                 ; BIOS loads boot sector at 0x7C00
 KERNEL_LOCATION equ 0x1000   ; where we load + jump to the next-stage kernel
 

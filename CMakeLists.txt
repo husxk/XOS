@@ -21,21 +21,5 @@ if(NOT _xos_c_compiler_name STREQUAL "${XOS_CROSS_PREFIX}-gcc")
     "Expected ${XOS_CROSS_PREFIX}-gcc, got: ${CMAKE_C_COMPILER}")
 endif()
 
-# kernel/CMakeLists.txt sets KERNEL_BIN (PARENT_SCOPE); boot needs it for sector count.
 add_subdirectory(kernel)
-
-# boot/CMakeLists.txt sets BOOT_BIN and exports it to this scope (PARENT_SCOPE).
 add_subdirectory(boot)
-
-set(OS_IMAGE "${CMAKE_BINARY_DIR}/os.img")
-
-add_custom_command(
-    OUTPUT "${OS_IMAGE}"
-    COMMAND ${CMAKE_COMMAND} -E cat "${BOOT_BIN}" "${KERNEL_BIN}" > "${OS_IMAGE}"
-    DEPENDS "${BOOT_BIN}" "${KERNEL_BIN}"
-    COMMENT "Creating os.img (boot + kernel)"
-    VERBATIM
-)
-
-add_custom_target(os_image ALL DEPENDS "${OS_IMAGE}")
-add_dependencies(os_image boot_bin kernel_bin)

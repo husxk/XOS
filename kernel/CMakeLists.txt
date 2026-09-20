@@ -1,9 +1,18 @@
+set(_KERNEL_ELF_SOURCES
+    kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/timer/pit.c timer/timer.c
+    drivers/keyboard/keyboard.c drivers/vga/vga.c mem/kmem.c log/kprint.c
+)
+
+if(NOT MB2_HEADER_O)
+    set(MB2_HEADER_O "${CMAKE_BINARY_DIR}/boot/grub/multiboot2_header.o")
+endif()
+list(APPEND _KERNEL_ELF_SOURCES "${MB2_HEADER_O}")
+
 set(START_ASM "${CMAKE_CURRENT_SOURCE_DIR}/start_kernel.asm")
 set(START_O   "${CMAKE_CURRENT_BINARY_DIR}/start_kernel.o")
 set(ISR_ASM   "${CMAKE_CURRENT_SOURCE_DIR}/cpu/isr.asm")
 set(ISR_O     "${CMAKE_CURRENT_BINARY_DIR}/isr.o")
 set(KERNEL_ELF "${CMAKE_CURRENT_BINARY_DIR}/kernel.elf")
-set(KERNEL_BIN "${CMAKE_CURRENT_BINARY_DIR}/kernel.bin")
 set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker.ld")
 
 add_custom_command(
@@ -26,7 +35,7 @@ add_custom_command(
 
 add_custom_target(isr_o DEPENDS "${ISR_O}")
 
-add_executable(kernel_elf "${START_O}" "${ISR_O}" kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/timer/pit.c timer/timer.c drivers/keyboard/keyboard.c drivers/vga/vga.c mem/kmem.c log/kprint.c)
+add_executable(kernel_elf "${START_O}" "${ISR_O}" ${_KERNEL_ELF_SOURCES})
 
 target_include_directories(kernel_elf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -57,15 +66,4 @@ if(NOT EXISTS "${XOS_LIBGCC}")
 endif()
 target_link_libraries(kernel_elf PRIVATE "${XOS_LIBGCC}")
 
-add_custom_command(
-    OUTPUT "${KERNEL_BIN}"
-    COMMAND "${XOS_OBJCOPY}" -O binary "$<TARGET_FILE:kernel_elf>" "${KERNEL_BIN}"
-    DEPENDS kernel_elf
-    COMMENT "kernel.elf -> kernel.bin"
-    VERBATIM
-)
-
-add_custom_target(kernel_bin ALL DEPENDS "${KERNEL_BIN}")
-add_dependencies(kernel_bin kernel_elf)
-
-set(KERNEL_BIN "${KERNEL_BIN}" PARENT_SCOPE)
+set(KERNEL_ELF "${KERNEL_ELF}" PARENT_SCOPE)

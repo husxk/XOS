@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     cmake \
     file \
+    grub-common \
+    grub-pc-bin \
+    xorriso \
     && rm -rf /var/lib/apt/lists/*
 
 COPY cross-toolchain.sh /tmp/cross-toolchain.sh

@@ -13,23 +13,27 @@ cmake -S "$ROOT" -B "${ROOT}/${BUILD_DIR}" \
 
 cmake --build "${ROOT}/${BUILD_DIR}" "$@"
 
-OS_IMAGE="${ROOT}/${BUILD_DIR}/os.img"
 KERNEL_ELF="${ROOT}/${BUILD_DIR}/kernel/kernel.elf"
-KERNEL_BIN="${ROOT}/${BUILD_DIR}/kernel/kernel.bin"
-echo -ne "\n\nBuilt: ${OS_IMAGE}\n"
+XOS_ISO="${ROOT}/${BUILD_DIR}/xos.iso"
 
-if [[ -f "${KERNEL_BIN}" ]]; then
-  bytes=$(stat -c%s "${KERNEL_BIN}")
-  sectors=$(( (bytes + 511) / 512 ))
-  boot_bytes=$((sectors * 512))
-  echo "Kernel image: ${bytes} bytes, ${sectors} disk sector(s) (512 B each)"
-  echo "  load address: 0x1000 (kernel starts at disk sector 2)"
-  echo "  boot loader reads: ${sectors} sector(s) (${boot_bytes} bytes) from sector 2"
+echo -ne "\n\n"
+if [[ ! -f "${KERNEL_ELF}" ]]; then
+  echo "Expected kernel image missing: ${KERNEL_ELF}" >&2
+  exit 1
 fi
+
+if [[ ! -f "${XOS_ISO}" ]]; then
+  echo "Expected boot ISO missing: ${XOS_ISO}" >&2
+  echo "  Install grub-mkrescue (Debian/Ubuntu: grub-common grub-pc-bin xorriso)" >&2
+  exit 1
+fi
+
+echo "Built: ${XOS_ISO}"
+echo "  Run: ./scripts/run-qemu.sh"
 
 echo -ne "\n"
 
-if [[ -f "${KERNEL_ELF}" ]] && command -v "${CROSS_PREFIX}-size" >/dev/null 2>&1; then
+if command -v "${CROSS_PREFIX}-size" >/dev/null 2>&1; then
   echo "ELF memory (${CROSS_PREFIX}-size):"
   "${CROSS_PREFIX}-size" --format=berkeley "${KERNEL_ELF}"
 fi

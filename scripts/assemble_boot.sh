@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Assemble boot.asm with KERNEL_SECTORS derived from kernel.bin size.
+# Reference script — not invoked by CMake. Assembles boot/bios/boot-bios.asm with KERNEL_SECTORS from kernel.bin.
+# Produce kernel.bin manually, e.g. i686-elf-objcopy -O binary build/kernel/kernel.elf build/kernel/kernel.bin
 
 set -euo pipefail
 
@@ -8,7 +9,7 @@ usage() {
 Usage: assemble_boot.sh --kernel PATH --boot-asm PATH --output PATH [--nasm PATH]
 
   --kernel    Raw kernel image (kernel.bin); size determines sectors to load
-  --boot-asm  boot.asm source
+  --boot-asm  boot-bios.asm source
   --output    boot.bin path to write
   --nasm      NASM executable (default: nasm, or NASM env var)
 EOF
@@ -44,7 +45,7 @@ if [[ ! -f "$KERNEL_BIN" ]]; then
 fi
 
 if [[ ! -f "$BOOT_ASM" ]]; then
-    echo "assemble_boot.sh: boot.asm not found: ${BOOT_ASM}" >&2
+    echo "assemble_boot.sh: boot sector asm not found: ${BOOT_ASM}" >&2
     exit 1
 fi
 
@@ -62,7 +63,7 @@ if (( sectors < 1 )); then
 fi
 
 if (( sectors > 127 )); then
-    echo "assemble_boot.sh: ${sectors} sectors exceeds INT 13h AL limit (127); add a read loop in boot.asm" >&2
+    echo "assemble_boot.sh: ${sectors} sectors exceeds INT 13h AL limit (127); extend boot-bios.asm read loop" >&2
     exit 1
 fi
 
