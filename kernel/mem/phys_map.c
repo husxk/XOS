@@ -94,6 +94,27 @@ const struct phys_region *phys_map_region(unsigned int index)
     return &regions[index];
 }
 
+static void phys_map_print_size(unsigned long long bytes)
+{
+    kprint(" ");
+
+    if (bytes >= 1024ULL * 1024ULL)
+    {
+        kprint_dec_u64(bytes / (1024ULL * 1024ULL));
+        kprint(" MiB");
+    }
+    else if (bytes >= 1024ULL)
+    {
+        kprint_dec_u64(bytes / 1024ULL);
+        kprint(" KiB");
+    }
+    else
+    {
+        kprint_dec_u64(bytes);
+        kprint(" B");
+    }
+}
+
 const char *phys_map_type_name(unsigned int type)
 {
     switch (type)
@@ -154,6 +175,7 @@ void phys_map_print(void)
         kprint_hex32(regions[i].type);
         kprint(" ");
         kprint(phys_map_type_name(regions[i].type));
+        phys_map_print_size(regions[i].length);
         kprint("\n");
     }
 
