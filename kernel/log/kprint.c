@@ -51,6 +51,28 @@ void kprint(const char *str)
     vga_puts(str);
 }
 
+void kprint_dec_u64(unsigned long long value)
+{
+    char buf[21];
+    unsigned int i = 20;
+
+    buf[i] = '\0';
+    if (value == 0)
+    {
+        kprint("0");
+        return;
+    }
+
+    while (value > 0 && i > 0)
+    {
+        i--;
+        buf[i] = (char)('0' + (value % 10));
+        value /= 10;
+    }
+
+    kprint(buf + i);
+}
+
 void kprint_hex32(unsigned int value)
 {
     static const char hex[] = "0123456789ABCDEF";
@@ -67,6 +89,25 @@ void kprint_hex32(unsigned int value)
     }
 
     buf[10] = '\0';
+    kprint(buf);
+}
+
+void kprint_hex64(unsigned long long value)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char buf[19];
+    unsigned int i;
+
+    buf[0] = '0';
+    buf[1] = 'x';
+
+    for (i = 0; i < 16; i++)
+    {
+        unsigned int shift = (15 - i) * 4;
+        buf[2 + i] = hex[(value >> shift) & 0xf];
+    }
+
+    buf[18] = '\0';
     kprint(buf);
 }
 

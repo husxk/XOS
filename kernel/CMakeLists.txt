@@ -1,6 +1,6 @@
 set(_KERNEL_ELF_SOURCES
     kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/timer/pit.c timer/timer.c
-    drivers/keyboard/keyboard.c drivers/vga/vga.c mem/kmem.c log/kprint.c
+    drivers/keyboard/keyboard.c drivers/vga/vga.c mem/kmem.c mem/phys_map.c log/kprint.c
 )
 
 if(NOT MB2_HEADER_O)

@@ -5,6 +5,7 @@
 #include "cpu/pic.h"
 #include "drivers/keyboard/keyboard.h"
 #include "log/kprint.h"
+#include "mem/phys_map.h"
 #include "timer/timer.h"
 
 #define TICK_REPORT_MS (10u * 1000u)
@@ -14,6 +15,7 @@ static const char msg[] = "Hello from kernel!";
 static void kernel_init(void)
 {
     kprint_init();
+    phys_map_init();
 
     idt_init();
     isr_init();
@@ -30,6 +32,7 @@ void kernel_main(void)
 
     kprint(msg);
     kprint("\n");
+    phys_map_print();
 
     for (;;)
     {
