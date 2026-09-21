@@ -2,6 +2,7 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "drivers/vga/vga.h"
@@ -15,6 +16,14 @@ enum kprint_state
     KPRINT_STATE_PERCENT,
     KPRINT_STATE_WIDTH,
     KPRINT_STATE_LENGTH,
+};
+
+enum kprint_length
+{
+    KPRINT_LENGTH_NONE,
+    KPRINT_LENGTH_LONG,
+    KPRINT_LENGTH_LONG_LONG,
+    KPRINT_LENGTH_SIZE,
 };
 
 static void kprint_spec_literal(const char *start, const char *end)
@@ -111,28 +120,6 @@ void kputs(const char *str)
     vga_puts(str);
 }
 
-void kprint_dec_u64(unsigned long long value)
-{
-    char buf[21];
-    unsigned int i = 20;
-
-    buf[i] = '\0';
-    if (value == 0)
-    {
-        kputs("0");
-        return;
-    }
-
-    while (value > 0 && i > 0)
-    {
-        i--;
-        buf[i] = (char)('0' + (value % 10));
-        value /= 10;
-    }
-
-    kputs(buf + i);
-}
-
 static void kvprint(const char *fmt, va_list ap);
 
 void kprint(const char *fmt, ...)
@@ -154,10 +141,9 @@ static void kvprint(const char *fmt, va_list ap)
     unsigned long len;
     unsigned int base;
     uint64_t value;
-    unsigned long magnitude;
-    long signed_value;
+    long long signed_value;
     bool negative;
-    bool is_long = false;
+    enum kprint_length length = KPRINT_LENGTH_NONE;
     char ch;
 
     while (*fmt != '\0')
@@ -172,7 +158,7 @@ static void kvprint(const char *fmt, va_list ap)
                     spec_start = fmt;
                     width = 0;
                     pad = ' ';
-                    is_long = false;
+                    length = KPRINT_LENGTH_NONE;
                     state = KPRINT_STATE_PERCENT;
                 }
                 else
@@ -197,6 +183,12 @@ static void kvprint(const char *fmt, va_list ap)
                 continue;
 
             case KPRINT_STATE_LENGTH:
+                if (c == 'l' && length == KPRINT_LENGTH_LONG)
+                {
+                    length = KPRINT_LENGTH_LONG_LONG;
+                    break;
+                }
+
                 if (c == 'l' || c == 'z')
                 {
                     kprint_spec_literal(spec_start, fmt);
@@ -204,13 +196,13 @@ static void kvprint(const char *fmt, va_list ap)
                     break;
                 }
 
-                is_long = true;
                 state = KPRINT_STATE_PERCENT;
                 continue;
 
             case KPRINT_STATE_PERCENT:
                 if (c == 'l' || c == 'z')
                 {
+                    length = (c == 'l') ? KPRINT_LENGTH_LONG : KPRINT_LENGTH_SIZE;
                     state = KPRINT_STATE_LENGTH;
                     break;
                 }
@@ -262,21 +254,56 @@ static void kvprint(const char *fmt, va_list ap)
                     case 'u':
                     case 'x':
                     case 'X':
+                        switch (length)
+                        {
+                            case KPRINT_LENGTH_LONG_LONG:
+                                value = va_arg(ap, unsigned long long);
+                                break;
+
+                            case KPRINT_LENGTH_LONG:
+                                value = va_arg(ap, unsigned long);
+                                break;
+
+                            case KPRINT_LENGTH_SIZE:
+                                value = va_arg(ap, size_t);
+                                break;
+
+                            default:
+                                value = va_arg(ap, unsigned int);
+                                break;
+                        }
+
                         base = (c == 'u') ? 10 : 16;
-                        value = is_long ? (uint64_t)va_arg(ap, unsigned long)
-                                        : (uint64_t)va_arg(ap, unsigned int);
                         kprint_number_format(value, base, (c == 'X'), false, width, pad);
                         break;
 
                     case 'd':
                     case 'i':
-                        signed_value = is_long ? va_arg(ap, long) : (long)va_arg(ap, int);
-                        negative = signed_value < 0;
-                        magnitude = (unsigned long)signed_value;
-                        if (negative)
-                            magnitude = 0ul - magnitude;
+                        switch (length)
+                        {
+                            case KPRINT_LENGTH_LONG_LONG:
+                                signed_value = va_arg(ap, long long);
+                                break;
 
-                        kprint_number_format(magnitude, 10, false, negative, width, pad);
+                            case KPRINT_LENGTH_LONG:
+                                signed_value = va_arg(ap, long);
+                                break;
+
+                            case KPRINT_LENGTH_SIZE:
+                                signed_value = va_arg(ap, ptrdiff_t);
+                                break;
+
+                            default:
+                                signed_value = va_arg(ap, int);
+                                break;
+                        }
+
+                        negative = signed_value < 0;
+                        value = (uint64_t)signed_value;
+                        if (negative)
+                            value = 0 - value;
+
+                        kprint_number_format(value, 10, false, negative, width, pad);
                         break;
 
                     /* Unlike printf, %p always uses the full pointer width and
@@ -301,25 +328,6 @@ static void kvprint(const char *fmt, va_list ap)
 
     if (state != KPRINT_STATE_NORMAL)
         vga_puts(spec_start);
-}
-
-void kprint_hex64(unsigned long long value)
-{
-    static const char hex[] = "0123456789ABCDEF";
-    char buf[19];
-    unsigned int i;
-
-    buf[0] = '0';
-    buf[1] = 'x';
-
-    for (i = 0; i < 16; i++)
-    {
-        unsigned int shift = (15 - i) * 4;
-        buf[2 + i] = hex[(value >> shift) & 0xf];
-    }
-
-    buf[18] = '\0';
-    kputs(buf);
 }
 
 void kprint_hexdump(const void *addr, unsigned long size)

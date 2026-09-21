@@ -96,22 +96,17 @@ const struct phys_region *phys_map_region(unsigned int index)
 
 static void phys_map_print_size(unsigned long long bytes)
 {
-    kprint(" ");
-
     if (bytes >= 1024ULL * 1024ULL)
     {
-        kprint_dec_u64(bytes / (1024ULL * 1024ULL));
-        kprint(" MiB");
+        kprint(" %llu MiB", bytes / (1024ULL * 1024ULL));
     }
     else if (bytes >= 1024ULL)
     {
-        kprint_dec_u64(bytes / 1024ULL);
-        kprint(" KiB");
+        kprint(" %llu KiB", bytes / 1024ULL);
     }
     else
     {
-        kprint_dec_u64(bytes);
-        kprint(" B");
+        kprint(" %llu B", bytes);
     }
 }
 
@@ -167,21 +162,15 @@ void phys_map_print(void)
 
     for (i = 0; i < region_count; i++)
     {
-        kprint("  ");
-        kprint_hex64(regions[i].base);
-        kprint(" + ");
-        kprint_hex64(regions[i].length);
-        kprint(" type 0x%08x %s", regions[i].type, phys_map_type_name(regions[i].type));
+        kprint("  0x%016llx + 0x%016llx type %u %s",
+               regions[i].base, regions[i].length,
+               regions[i].type, phys_map_type_name(regions[i].type));
         phys_map_print_size(regions[i].length);
-        kprint("\n");
+        kputs("\n");
     }
 
     unsigned long long total = phys_map_total_available();
     unsigned long long mib = total / (1024ULL * 1024ULL);
 
-    kprint("available RAM: ");
-    kprint_hex64(total);
-    kprint(" bytes (");
-    kprint_dec_u64(mib);
-    kprint(" MiB)\n");
+    kprint("available RAM: 0x%016llx bytes (%llu MiB)\n", total, mib);
 }
