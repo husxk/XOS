@@ -379,45 +379,109 @@ void phys_mem_init(void)
     phys_mem_apply_fixed_reserves();
 }
 
-static void *phys_mem_take_frame(unsigned long frame)
+static int phys_mem_run_is_free(unsigned long start_frame, unsigned long page_count)
 {
-    phys_mem_set_frame_used(frame, 1);
-    phys_mem_alloc_hint = frame + 1u;
-    if (phys_mem_alloc_hint > phys_mem_max_frame)
-        phys_mem_alloc_hint = 0;
+    unsigned long i;
 
-    return (void *)(unsigned long)phys_mem_frame_to_phys(frame);
+    for (i = 0; i < page_count; i++)
+    {
+        if (phys_mem_frame_is_used(start_frame + i))
+            return 0;
+    }
+
+    return 1;
 }
 
-void *phys_mem_alloc_page(void)
+static int phys_mem_run_is_used(unsigned long start_frame, unsigned long page_count)
+{
+    unsigned long i;
+
+    for (i = 0; i < page_count; i++)
+    {
+        if (!phys_mem_frame_is_used(start_frame + i))
+            return 0;
+    }
+
+    return 1;
+}
+
+static void phys_mem_set_alloc_hint_after(unsigned long last_frame)
+{
+    phys_mem_alloc_hint = last_frame + 1u;
+    if (phys_mem_alloc_hint > phys_mem_max_frame)
+        phys_mem_alloc_hint = 0;
+}
+
+static void *phys_mem_take_frames(unsigned long start_frame, unsigned long page_count)
+{
+    unsigned long i;
+
+    for (i = 0; i < page_count; i++)
+        phys_mem_set_frame_used(start_frame + i, 1);
+
+    phys_mem_set_alloc_hint_after(start_frame + page_count - 1u);
+
+    return (void *)(unsigned long)phys_mem_frame_to_phys(start_frame);
+}
+
+static int phys_mem_run_fits(unsigned long start_frame, unsigned long page_count)
+{
+    unsigned long last_frame;
+
+    if (page_count == 0)
+        return 0;
+
+    last_frame = start_frame + page_count - 1u;
+    if (last_frame < start_frame)
+        return 0;
+
+    return last_frame <= phys_mem_max_frame;
+}
+
+void *phys_mem_alloc_pages(unsigned long page_count)
 {
     unsigned long frame;
     unsigned long start;
 
-    if (phys_mem_frame_total == 0 || phys_mem_bitmap == 0)
+    if (page_count == 0 || phys_mem_frame_total == 0 || phys_mem_bitmap == 0)
         return 0;
 
     start = phys_mem_alloc_hint;
 
     for (frame = start; frame <= phys_mem_max_frame; frame++)
     {
-        if (!phys_mem_frame_is_used(frame))
-            return phys_mem_take_frame(frame);
+        if (!phys_mem_run_fits(frame, page_count))
+            continue;
+
+        if (phys_mem_run_is_free(frame, page_count))
+            return phys_mem_take_frames(frame, page_count);
     }
 
     for (frame = 0; frame < start; frame++)
     {
-        if (!phys_mem_frame_is_used(frame))
-            return phys_mem_take_frame(frame);
+        if (!phys_mem_run_fits(frame, page_count))
+            continue;
+
+        if (phys_mem_run_is_free(frame, page_count))
+            return phys_mem_take_frames(frame, page_count);
     }
 
     return 0;
 }
 
-void phys_mem_free_page(void *page)
+void *phys_mem_alloc_page(void)
 {
-    unsigned long phys = (unsigned long)page;
+    return phys_mem_alloc_pages(1);
+}
+
+void phys_mem_free_pages(void *base, unsigned long page_count)
+{
+    unsigned long phys = (unsigned long)base;
     unsigned long frame;
+    unsigned long i;
+
+    if (page_count == 0)
+        return;
 
     if ((phys & (PHYS_MEM_PAGE_SIZE - 1u)) != 0u)
     {
@@ -431,13 +495,25 @@ void phys_mem_free_page(void *page)
         return;
     }
 
-    if (!phys_mem_frame_is_used(frame))
+    if (!phys_mem_run_fits(frame, page_count))
+    {
+        kprint("phys_mem: free ignored (out of range)\n");
+        return;
+    }
+
+    if (!phys_mem_run_is_used(frame, page_count))
     {
         kprint("phys_mem: free ignored (not allocated)\n");
         return;
     }
 
-    phys_mem_set_frame_used(frame, 0);
+    for (i = 0; i < page_count; i++)
+        phys_mem_set_frame_used(frame + i, 0);
+}
+
+void phys_mem_free_page(void *page)
+{
+    phys_mem_free_pages(page, 1);
 }
 
 void phys_mem_print_stats(void)

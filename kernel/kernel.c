@@ -39,11 +39,11 @@ void kernel_main(void)
     phys_mem_print_stats();
 
     {
-        void *page_a = phys_mem_alloc_page();
-        void *page_b = phys_mem_alloc_page();
+        void *block = phys_mem_alloc_pages(4);
 
-        if (page_a != 0 && page_b != 0)
+        if (block != 0)
         {
+<<<<<<< HEAD
             kprint("phys_mem test alloc 0x%x 0x%x\n",
                    (unsigned int)(unsigned long)page_a,
                    (unsigned int)(unsigned long)page_b);
@@ -51,9 +51,15 @@ void kernel_main(void)
             phys_mem_free_page(page_a);
             phys_mem_free_page(page_b);
             phys_mem_free_page(page_a);
+=======
+            kprint("phys_mem test alloc_pages(4) ");
+            kprint_hex32((unsigned int)(unsigned long)block);
+            kprint("\n");
+            phys_mem_free_pages(block, 4);
+>>>>>>> 334953c (Add multi-page alloc and free to phys_mem)
         }
         else
-            kprint("phys_mem test alloc failed\n");
+            kprint("phys_mem test alloc_pages failed\n");
     }
 
     phys_mem_print_stats();
