@@ -6,6 +6,7 @@
 #include "drivers/keyboard/keyboard.h"
 #include "log/kprint.h"
 #include "mem/phys_map.h"
+#include "mem/phys_mem.h"
 #include "timer/timer.h"
 
 #define TICK_REPORT_MS (10u * 1000u)
@@ -16,6 +17,7 @@ static void kernel_init(void)
 {
     kprint_init();
     phys_map_init();
+    phys_mem_init();
 
     idt_init();
     isr_init();
@@ -34,6 +36,27 @@ void kernel_main(void)
     kputs("\n");
     phys_map_print();
     kprint_hexdump(msg, sizeof(msg) - 1);
+    phys_mem_print_stats();
+
+    {
+        void *page_a = phys_mem_alloc_page();
+        void *page_b = phys_mem_alloc_page();
+
+        if (page_a != 0 && page_b != 0)
+        {
+            kprint("phys_mem test alloc 0x%x 0x%x\n",
+                   (unsigned int)(unsigned long)page_a,
+                   (unsigned int)(unsigned long)page_b);
+
+            phys_mem_free_page(page_a);
+            phys_mem_free_page(page_b);
+            phys_mem_free_page(page_a);
+        }
+        else
+            kprint("phys_mem test alloc failed\n");
+    }
+
+    phys_mem_print_stats();
 
     for (;;)
     {
@@ -41,6 +64,6 @@ void kernel_main(void)
 
         ksleep_ms((time_t)TICK_REPORT_MS);
         ticks = ktimer_ticks();
-        kprint("ticks %u\n", ticks);
+        kprint("ticks %u\n", (unsigned int)ticks);
     }
 }
