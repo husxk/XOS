@@ -5,6 +5,7 @@
 #include "cpu/pic.h"
 #include "drivers/keyboard/keyboard.h"
 #include "log/kprint.h"
+#include "mem/paging.h"
 #include "mem/phys_map.h"
 #include "mem/phys_mem.h"
 #include "timer/timer.h"
@@ -18,9 +19,11 @@ static void kernel_init(void)
     kprint_init();
     phys_map_init();
     phys_mem_init();
+    paging_init();
 
     idt_init();
     isr_init();
+    paging_enable();
     pic_init();
     ktimer_init();
     keyboard_init();
@@ -43,20 +46,9 @@ void kernel_main(void)
 
         if (block != 0)
         {
-<<<<<<< HEAD
-            kprint("phys_mem test alloc 0x%x 0x%x\n",
-                   (unsigned int)(unsigned long)page_a,
-                   (unsigned int)(unsigned long)page_b);
-
-            phys_mem_free_page(page_a);
-            phys_mem_free_page(page_b);
-            phys_mem_free_page(page_a);
-=======
-            kprint("phys_mem test alloc_pages(4) ");
-            kprint_hex32((unsigned int)(unsigned long)block);
-            kprint("\n");
+            kprint("phys_mem test alloc_pages(4) 0x%x\n",
+                   (unsigned int)(unsigned long)block);
             phys_mem_free_pages(block, 4);
->>>>>>> 334953c (Add multi-page alloc and free to phys_mem)
         }
         else
             kprint("phys_mem test alloc_pages failed\n");
