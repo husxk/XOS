@@ -13,7 +13,6 @@
  * not a cap on how much RAM the machine has.
  */
 #define PHYS_MEM_ADDR_CAP (1ULL << 32)
-#define KERNEL_LOAD_PHYS  0x1000u
 
 extern char _end[];
 extern char stack_bottom[];

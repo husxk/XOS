@@ -2,11 +2,9 @@
 
 #include "log/kprint.h"
 #include "mem/kmem.h"
+#include "mem/mem_layout.h"
 #include "mem/multiboot2.h"
 #include "mem/phys_mem.h"
-
-#define PAGING_PAGE_SIZE 4096u
-#define KERNEL_LOAD_PHYS  0x1000u
 
 #define PAGING_OFFSET_BITS 12u
 #define PAGING_PT_INDEX_BITS 10u
@@ -41,13 +39,13 @@ static unsigned long page_directory_phys;
 
 static unsigned long long paging_align_down_u64(unsigned long long addr)
 {
-    return addr & ~(unsigned long long)(PAGING_PAGE_SIZE - 1u);
+    return addr & ~(unsigned long long)(XOS_PAGE_SIZE - 1u);
 }
 
 static unsigned long long paging_align_up_u64(unsigned long long addr)
 {
-    return (addr + (unsigned long long)PAGING_PAGE_SIZE - 1u) &
-           ~(unsigned long long)(PAGING_PAGE_SIZE - 1u);
+    return (addr + (unsigned long long)XOS_PAGE_SIZE - 1u) &
+           ~(unsigned long long)(XOS_PAGE_SIZE - 1u);
 }
 
 static unsigned int paging_pd_index(unsigned long virt)
@@ -94,7 +92,7 @@ static paging_entry_t *paging_get_or_create_pt(unsigned int pd_index)
 
     pt_phys = (unsigned long)pt_frame;
     pt = (paging_entry_t *)pt_phys;
-    kmemset(pt, 0, PAGING_PAGE_SIZE);
+    kmemset(pt, 0, XOS_PAGE_SIZE);
 
     page_directory[pd_index] = paging_make_entry(pt_phys, PAGING_TABLE_FLAGS);
 
@@ -147,7 +145,7 @@ static void paging_map_identity_range(unsigned long base, unsigned long length)
         return;
 
     addr = (unsigned long)paging_align_down_u64(base);
-    for (; addr < end; addr += PAGING_PAGE_SIZE)
+    for (; addr < end; addr += XOS_PAGE_SIZE)
     {
         if (!paging_map_identity(addr))
         {
@@ -220,7 +218,7 @@ void paging_init(void)
 
     page_directory_phys = (unsigned long)pd_frame;
     page_directory = (paging_entry_t *)page_directory_phys;
-    kmemset(page_directory, 0, PAGING_PAGE_SIZE);
+    kmemset(page_directory, 0, XOS_PAGE_SIZE);
 
     paging_map_boot_regions();
 

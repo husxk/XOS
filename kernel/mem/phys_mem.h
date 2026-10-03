@@ -1,6 +1,8 @@
 #pragma once
 
-#define PHYS_MEM_PAGE_SIZE 4096u
+#include "mem/mem_layout.h"
+
+#define PHYS_MEM_PAGE_SIZE XOS_PAGE_SIZE
 
 void phys_mem_init(void);
 
