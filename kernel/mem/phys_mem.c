@@ -20,6 +20,8 @@ extern char stack_bottom[];
 extern char stack_top[];
 
 static unsigned char *phys_mem_bitmap;
+static unsigned long phys_mem_bitmap_storage_base;
+static unsigned long phys_mem_bitmap_storage_page_span;
 static unsigned long phys_mem_bitmap_size_bytes;
 static unsigned long phys_mem_max_frame;
 static unsigned long phys_mem_frame_total;
@@ -111,10 +113,70 @@ static void phys_mem_set_frame_used(unsigned long frame, int used)
     }
 }
 
+/* One bit per frame; eight frame bits per bitmap byte (frame N → byte N/8). */
+static unsigned char phys_mem_bitmap_frame_span_mask(unsigned char lo_bit, unsigned char hi_bit)
+{
+    return (unsigned char)(((unsigned char)0xFFu >> (7u - hi_bit)) &
+                           ((unsigned char)0xFFu << lo_bit));
+}
+
+static void phys_mem_bitmap_apply_mask(unsigned long bitmap_byte, unsigned char mask, int used)
+{
+    if (used)
+        phys_mem_bitmap[bitmap_byte] |= mask;
+    else
+        phys_mem_bitmap[bitmap_byte] &= (unsigned char)~mask;
+}
+
+static void phys_mem_bitmap_mark_frames(unsigned long start_frame, unsigned long end_frame, int used)
+{
+    unsigned long bitmap_byte_lo;
+    unsigned long bitmap_byte_hi;
+    unsigned long bitmap_byte;
+    unsigned char middle_fill = used ? (unsigned char)0xFFu : 0u;
+
+    if (phys_mem_bitmap == 0 || start_frame > end_frame)
+        return;
+
+    if (end_frame > phys_mem_max_frame)
+        end_frame = phys_mem_max_frame;
+
+    bitmap_byte_lo = start_frame / 8u;
+    bitmap_byte_hi = end_frame / 8u;
+
+    if (bitmap_byte_lo == bitmap_byte_hi)
+    {
+        unsigned char lo_bit = (unsigned char)(start_frame % 8u);
+        unsigned char hi_bit = (unsigned char)(end_frame % 8u);
+        unsigned char mask = phys_mem_bitmap_frame_span_mask(lo_bit, hi_bit);
+
+        phys_mem_bitmap_apply_mask(bitmap_byte_lo, mask, used);
+        return;
+    }
+
+    {
+        unsigned char lo_bit = (unsigned char)(start_frame % 8u);
+        unsigned char mask = (unsigned char)(0xFFu << lo_bit);
+
+        phys_mem_bitmap_apply_mask(bitmap_byte_lo, mask, used);
+    }
+
+    for (bitmap_byte = bitmap_byte_lo + 1u; bitmap_byte < bitmap_byte_hi; bitmap_byte++)
+        phys_mem_bitmap[bitmap_byte] = middle_fill;
+
+    {
+        unsigned char hi_bit = (unsigned char)(end_frame % 8u);
+        unsigned char mask = (unsigned char)((1u << (hi_bit + 1u)) - 1u);
+
+        phys_mem_bitmap_apply_mask(bitmap_byte_hi, mask, used);
+    }
+}
+
 static void phys_mem_mark_range(unsigned long base, unsigned long length, int used)
 {
     unsigned long end_phys;
-    unsigned long frame;
+    unsigned long start_frame;
+    unsigned long end_frame;
 
     if (length == 0)
         return;
@@ -123,18 +185,52 @@ static void phys_mem_mark_range(unsigned long base, unsigned long length, int us
     if (end_phys <= base)
         return;
 
-    frame = phys_mem_align_down(base) / PHYS_MEM_PAGE_SIZE;
+    start_frame = phys_mem_align_down(base) / PHYS_MEM_PAGE_SIZE;
+    end_phys = phys_mem_align_up(end_phys);
+    if (end_phys == 0)
+        return;
 
-    while (frame <= phys_mem_max_frame)
+    end_frame = end_phys / PHYS_MEM_PAGE_SIZE;
+    if (end_frame == 0)
+        return;
+
+    end_frame--;
+
+    if (start_frame > phys_mem_max_frame)
+        return;
+
+    phys_mem_bitmap_mark_frames(start_frame, end_frame, used);
+}
+
+static unsigned long phys_mem_recount_free_frames(void)
+{
+    unsigned long free = 0;
+    unsigned long byte;
+
+    if (phys_mem_bitmap == 0)
+        return 0;
+
+    for (byte = 0; byte < phys_mem_bitmap_size_bytes; byte++)
     {
-        unsigned long frame_phys = phys_mem_frame_to_phys(frame);
+        unsigned char v = phys_mem_bitmap[byte];
+        unsigned int bits = 8u;
 
-        if (frame_phys >= end_phys)
-            break;
+        if (byte == phys_mem_bitmap_size_bytes - 1u)
+        {
+            unsigned long frame_count = phys_mem_max_frame + 1u;
+            unsigned long tail = frame_count % 8u;
 
-        phys_mem_set_frame_used(frame, used);
-        frame++;
+            bits = (tail == 0u) ? 8u : (unsigned int)tail;
+        }
+
+        for (unsigned int bit = 0; bit < bits; bit++)
+        {
+            if ((v & (unsigned char)(1u << bit)) == 0)
+                free++;
+        }
     }
+
+    return free;
 }
 
 static void phys_mem_mark_range_used(unsigned long base, unsigned long length)
@@ -344,6 +440,8 @@ static void phys_mem_mark_available_from_map(void)
 static void phys_mem_reset_state(void)
 {
     phys_mem_bitmap = 0;
+    phys_mem_bitmap_storage_base = 0;
+    phys_mem_bitmap_storage_page_span = 0;
     phys_mem_bitmap_size_bytes = 0;
     phys_mem_max_frame = 0;
     phys_mem_frame_total = 0;
@@ -369,6 +467,8 @@ void phys_mem_init(void)
     }
 
     bitmap_page_span = phys_mem_bitmap_page_span(phys_mem_bitmap_size_bytes);
+    phys_mem_bitmap_storage_base = bitmap_storage_base;
+    phys_mem_bitmap_storage_page_span = bitmap_page_span;
     phys_mem_bitmap = (unsigned char *)(unsigned long)bitmap_storage_base;
     kmemset(phys_mem_bitmap, 0xFF, phys_mem_bitmap_size_bytes);
 
@@ -377,6 +477,24 @@ void phys_mem_init(void)
     /* Reserve every page the bitmap occupies (page_span), not just byte_length. */
     phys_mem_mark_range_used(bitmap_storage_base, bitmap_page_span);
     phys_mem_apply_fixed_reserves();
+
+    phys_mem_free_count = phys_mem_recount_free_frames();
+}
+
+void phys_mem_bitmap_storage_span(unsigned long *base, unsigned long *page_span)
+{
+    if (base == 0 || page_span == 0)
+        return;
+
+    if (phys_mem_bitmap == 0)
+    {
+        *base = 0;
+        *page_span = 0;
+        return;
+    }
+
+    *base = phys_mem_bitmap_storage_base;
+    *page_span = phys_mem_bitmap_storage_page_span;
 }
 
 static int phys_mem_run_is_free(unsigned long start_frame, unsigned long page_count)

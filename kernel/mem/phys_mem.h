@@ -4,6 +4,9 @@
 
 void phys_mem_init(void);
 
+/* Page-aligned [base, base + page_span) of the frame bitmap; (0, 0) if unset. */
+void phys_mem_bitmap_storage_span(unsigned long *base, unsigned long *page_span);
+
 /* Physical address (identity-mapped). NULL only on OOM (not phys 0). */
 void *phys_mem_alloc_pages(unsigned long page_count);
 
