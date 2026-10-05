@@ -5,6 +5,7 @@
 #include "cpu/pic.h"
 #include "drivers/keyboard/keyboard.h"
 #include "log/kprint.h"
+#include "mem/heap.h"
 #include "mem/paging.h"
 #include "mem/phys_map.h"
 #include "mem/phys_mem.h"
@@ -12,7 +13,50 @@
 
 #define TICK_REPORT_MS (10u * 1000u)
 
-static const char msg[] = "Hello from kernel!";
+static const char msg[] = "Hello from kernel!\n";
+
+static void heap_smoke_test(void)
+{
+    void *a;
+    void *b;
+    unsigned char *bytes;
+
+    a = heap_alloc(64);
+    if (a == 0)
+    {
+        kprint("heap test: alloc(64) failed\n");
+        return;
+    }
+
+    bytes = (unsigned char *)a;
+    bytes[0] = 0xab;
+    bytes[63] = 0xcd;
+
+    b = heap_alloc(128);
+    if (b == 0)
+    {
+        kprint("heap test: alloc(128) failed\n");
+        heap_free(a);
+        return;
+    }
+
+    kprint("heap test: a=0x%x b=0x%x\n",
+           (unsigned int)(unsigned long)a, (unsigned int)(unsigned long)b);
+
+    heap_free(a);
+    heap_free(b);
+
+    a = heap_alloc(32);
+    if (a == 0)
+        kprint("heap test: alloc(32) after free failed\n");
+    else
+    {
+        kprint("heap test: reuse 0x%x\n", (unsigned int)(unsigned long)a);
+        heap_free(a);
+    }
+
+    kprint("heap test: done\n");
+}
 
 static void kernel_init(void)
 {
@@ -24,6 +68,9 @@ static void kernel_init(void)
     idt_init();
     isr_init();
     paging_enable();
+
+    heap_init();
+
     pic_init();
     ktimer_init();
     keyboard_init();
@@ -36,9 +83,7 @@ void kernel_main(void)
     kernel_init();
 
     kputs(msg);
-    kputs("\n");
     phys_map_print();
-    kprint_hexdump(msg, sizeof(msg) - 1);
     phys_mem_print_stats();
 
     {
@@ -55,6 +100,7 @@ void kernel_main(void)
     }
 
     phys_mem_print_stats();
+    heap_smoke_test();
 
     for (;;)
     {

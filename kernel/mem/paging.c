@@ -113,14 +113,20 @@ static paging_entry_t *paging_get_or_create_pt(unsigned int pd_index)
     return pt;
 }
 
-static int paging_map_identity(unsigned long phys)
+static int paging_map_page_internal(unsigned long virt, unsigned long phys)
 {
     paging_entry_t *pt;
-    unsigned long virt;
     unsigned int pd_i;
     unsigned int pt_i;
 
-    virt = phys;
+    if (page_directory_phys == 0)
+        return 0;
+
+    if ((virt & (XOS_PAGE_SIZE - 1u)) != 0u)
+        return 0;
+    if ((phys & (XOS_PAGE_SIZE - 1u)) != 0u)
+        return 0;
+
     pd_i = paging_pd_index(virt);
     pt_i = paging_pt_index(virt);
 
@@ -130,6 +136,20 @@ static int paging_map_identity(unsigned long phys)
 
     pt[pt_i] = paging_make_entry(phys, PAGING_KERNEL_FLAGS);
     return 1;
+}
+
+int paging_map_page(unsigned long virt, unsigned long phys)
+{
+    if (!paging_map_page_internal(virt, phys))
+        return 0;
+
+    __asm__ volatile("invlpg (%0)" : : "r"(virt) : "memory");
+    return 1;
+}
+
+static int paging_map_identity(unsigned long phys)
+{
+    return paging_map_page_internal(phys, phys);
 }
 
 static void paging_map_identity_range(unsigned long base, unsigned long length)

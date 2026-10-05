@@ -5,3 +5,6 @@
 void paging_init(void);
 
 void paging_enable(void);
+
+/* One 4 KiB supervisor mapping; virt and phys must be page-aligned. Returns 1 on success. */
+int paging_map_page(unsigned long virt, unsigned long phys);

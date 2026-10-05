@@ -8,3 +8,11 @@
  * boot/bios/boot-bios.asm (KERNEL_LOCATION).
  */
 #define KERNEL_LOAD_PHYS 0x1000u
+
+/*
+ * Kernel heap virtual range.
+ * Must be page-aligned.
+ */
+#define KERNEL_HEAP_BASE 0x00800000u
+#define KERNEL_HEAP_PAGE_COUNT 64u
+#define KERNEL_HEAP_SIZE (KERNEL_HEAP_PAGE_COUNT * XOS_PAGE_SIZE)
