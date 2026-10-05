@@ -13,6 +13,7 @@
 #include "mem/phys_mem_kernel.h"
 #include "mem/phys_mem_print.h"
 #include "timer/timer.h"
+#include "drivers/vga/vga.h"
 
 #define TICK_REPORT_MS (10u * 1000u)
 
@@ -61,6 +62,11 @@ static void heap_smoke_test(void)
     kprint("heap test: done\n");
 }
 
+static void on_key(char c)
+{
+    vga_putchar(c);
+}
+
 static void kernel_init(void)
 {
     kprint_init();
@@ -76,7 +82,9 @@ static void kernel_init(void)
 
     pic_init();
     ktimer_init();
+    
     keyboard_init();
+    keyboard_set_handler(on_key);
 
     cpu_enable_interrupts();
 }
