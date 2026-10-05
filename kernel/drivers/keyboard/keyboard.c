@@ -1,28 +1,25 @@
 #include "drivers/keyboard/keyboard.h"
 
-#include "cpu/io.h"
-#include "cpu/irq.h"
-#include "cpu/isr.h"
-#include "cpu/pic.h"
-#include "log/kprint.h"
+#include "drivers/keyboard/ps2/ps2_keyboard.h"
 
-#define KBD_IRQ       1
-#define KBD_DATA_PORT 0x60
+static volatile keyboard_handler_t kbd_handler;
 
-static void keyboard_isr(interrupt_frame_t *frame)
+void keyboard_set_handler(keyboard_handler_t handler)
 {
-    unsigned char scancode;
+    kbd_handler = handler;
+}
 
-    (void)frame;
+void keyboard_emit(char c)
+{
+    keyboard_handler_t handler = kbd_handler;
 
-    scancode = io_inb(KBD_DATA_PORT);
-    irq_ack(KBD_IRQ);
-
-    kprint("key 0x%02x\n", scancode);
+    if (handler != 0)
+        handler(c);
 }
 
 void keyboard_init(void)
 {
-    isr_install_irq(KBD_IRQ, keyboard_isr);
-    pic_unmask(KBD_IRQ);
+    kbd_handler = 0;
+
+    ps2_keyboard_init();
 }
