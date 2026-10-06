@@ -1,7 +1,7 @@
 #include "mem/phys_mem.h"
 
 #include "log/kprint.h"
-#include "mem/kmem.h"
+#include "mem/kmem_utils.h"
 #include "mem/multiboot2.h"
 #include "mem/phys_map.h"
 

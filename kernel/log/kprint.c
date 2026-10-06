@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #include "drivers/vga/vga.h"
-#include "mem/kmem.h"
+#include "mem/kmem_utils.h"
 
 #define KPRINT_WIDTH_MAX 256
 

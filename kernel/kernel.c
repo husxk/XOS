@@ -5,7 +5,7 @@
 #include "cpu/pic.h"
 #include "drivers/keyboard/keyboard.h"
 #include "log/kprint.h"
-#include "mem/heap.h"
+#include "mem/kmem.h"
 #include "mem/paging.h"
 #include "mem/phys_map.h"
 #include "mem/phys_mem.h"
@@ -21,7 +21,7 @@ static void heap_smoke_test(void)
     void *b;
     unsigned char *bytes;
 
-    a = heap_alloc(64);
+    a = kmalloc(64);
     if (a == 0)
     {
         kprint("heap test: alloc(64) failed\n");
@@ -32,27 +32,27 @@ static void heap_smoke_test(void)
     bytes[0] = 0xab;
     bytes[63] = 0xcd;
 
-    b = heap_alloc(128);
+    b = kmalloc(128);
     if (b == 0)
     {
         kprint("heap test: alloc(128) failed\n");
-        heap_free(a);
+        kfree(a);
         return;
     }
 
     kprint("heap test: a=0x%x b=0x%x\n",
            (unsigned int)(unsigned long)a, (unsigned int)(unsigned long)b);
 
-    heap_free(a);
-    heap_free(b);
+    kfree(a);
+    kfree(b);
 
-    a = heap_alloc(32);
+    a = kmalloc(32);
     if (a == 0)
         kprint("heap test: alloc(32) after free failed\n");
     else
     {
         kprint("heap test: reuse 0x%x\n", (unsigned int)(unsigned long)a);
-        heap_free(a);
+        kfree(a);
     }
 
     kprint("heap test: done\n");
@@ -69,7 +69,7 @@ static void kernel_init(void)
     isr_init();
     paging_enable();
 
-    heap_init();
+    kheap_init();
 
     pic_init();
     ktimer_init();

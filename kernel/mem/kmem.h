@@ -1,5 +1,7 @@
 #pragma once
 
-void *kmemset(void *s, int c, unsigned long n);
+void kheap_init(void);
 
-unsigned long kstrlen(const char *s);
+void *kmalloc(unsigned long size);
+
+void kfree(void *ptr);

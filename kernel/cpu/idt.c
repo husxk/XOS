@@ -1,6 +1,6 @@
 #include "cpu/idt.h"
 
-#include "mem/kmem.h"
+#include "mem/kmem_utils.h"
 
 /*
  * Alignment of the in-memory IDT array.
