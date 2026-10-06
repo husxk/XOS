@@ -10,6 +10,13 @@
 #define KERNEL_LOAD_PHYS 0x1000u
 
 /*
+ * Kernel VA used only to memset() the next L2 frame before it is linked from
+ * a PDE. Retargeted with paging_map_page(); not the PT's final identity VA.
+ * Page-aligned; must stay below KERNEL_HEAP_BASE.
+ */
+#define PAGING_PT_STAGING_VA 0x007ff000u
+
+/*
  * Kernel heap virtual range.
  * Must be page-aligned.
  */

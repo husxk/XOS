@@ -37,6 +37,10 @@ extern char stack_top[];
 static paging_entry_t *page_directory;
 static unsigned long page_directory_phys;
 
+/* Phys frame of the next all-zero L2 page; cleared via PAGING_PT_STAGING_VA. */
+static unsigned long spare_phys;
+static int staging_ready;
+
 static unsigned long long paging_align_down_u64(unsigned long long addr)
 {
     return addr & ~(unsigned long long)(XOS_PAGE_SIZE - 1u);
@@ -74,6 +78,64 @@ static int paging_entry_present(paging_entry_t entry)
 }
 
 static int paging_map_identity(unsigned long phys);
+static int paging_map_page_internal(unsigned long virt, unsigned long phys);
+
+static int paging_cr0_pg(void)
+{
+    unsigned long cr0;
+
+    __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
+    return (cr0 & 0x80000000u) != 0;
+}
+
+/* Map phys at the fixed staging VA and zero the page (safe while CR0.PG is set). */
+static int paging_pt_staging_map(unsigned long phys)
+{
+    if (!paging_map_page(PAGING_PT_STAGING_VA, phys))
+        return 0;
+
+    kmemset((void *)(unsigned long)PAGING_PT_STAGING_VA, 0, XOS_PAGE_SIZE);
+    return 1;
+}
+
+static int paging_pt_spare_refill(void)
+{
+    void *frame;
+
+    frame = phys_mem_alloc_page();
+    if (frame == 0)
+        return 0;
+
+    if (!paging_pt_staging_map((unsigned long)frame))
+        return 0;
+
+    spare_phys = (unsigned long)frame;
+    return 1;
+}
+
+static void paging_pt_staging_init(void)
+{
+    void *frame;
+
+    spare_phys = 0;
+    staging_ready = 0;
+
+    frame = phys_mem_alloc_page();
+    if (frame == 0)
+    {
+        kprint("paging: PT staging alloc failed\n");
+        return;
+    }
+
+    if (!paging_pt_staging_map((unsigned long)frame))
+    {
+        kprint("paging: PT staging map failed\n");
+        return;
+    }
+
+    spare_phys = (unsigned long)frame;
+    staging_ready = 1;
+}
 
 static paging_entry_t *paging_get_or_create_pt(unsigned int pd_index)
 {
@@ -86,6 +148,39 @@ static paging_entry_t *paging_get_or_create_pt(unsigned int pd_index)
     if (paging_entry_present(pde))
         return (paging_entry_t *)paging_entry_frame(pde);
 
+    /*
+     * With paging on, arbitrary phys cannot be cleared directly. spare_phys
+     * holds a frame already zeroed through PAGING_PT_STAGING_VA. Refill the
+     * staging mapping before installing the PDE so the staging slot never
+     * aliases a live page table. Identity-map the new L2 so later pt[] writes
+     * through (paging_entry_t *)pt_phys remain valid.
+     */
+    if (paging_cr0_pg())
+    {
+        if (!staging_ready || spare_phys == 0)
+        {
+            kprint("paging: PT spare unavailable\n");
+            return 0;
+        }
+
+        pt_phys = spare_phys;
+        if (!paging_pt_spare_refill())
+        {
+            kprint("paging: PT spare refill failed\n");
+            return 0;
+        }
+
+        page_directory[pd_index] = paging_make_entry(pt_phys, PAGING_TABLE_FLAGS);
+        if (!paging_map_identity(pt_phys))
+            return 0;
+
+        return (paging_entry_t *)pt_phys;
+    }
+
+    /*
+     * During paging_init (CR0.PG clear): identity-mapped kernel uses linear
+     * phys addresses, so allocate a frame and kmemset it in place.
+     */
     pt_frame = phys_mem_alloc_page();
     if (pt_frame == 0)
         return 0;
@@ -96,18 +191,7 @@ static paging_entry_t *paging_get_or_create_pt(unsigned int pd_index)
 
     page_directory[pd_index] = paging_make_entry(pt_phys, PAGING_TABLE_FLAGS);
 
-    /*
-     * PDE (Page Directory Entry) points at this PT; a present PTE (Page
-     * Table Entry) is still required for VA pt_phys so later pt[] writes work
-     * after paging_enable. Same 4 MiB window: PTE in this table; otherwise
-     * paging_map_identity installs it under the matching PDE.
-     */
-    if (pd_index == paging_pd_index(pt_phys))
-    {
-        pt[paging_pt_index(pt_phys)] =
-            paging_make_entry(pt_phys, PAGING_KERNEL_FLAGS);
-    }
-    else if (!paging_map_identity(pt_phys))
+    if (!paging_map_identity(pt_phys))
         return 0;
 
     return pt;
@@ -244,6 +328,8 @@ void paging_init(void)
 
     /* Page directory page must be reachable at VA == page_directory_phys too. */
     (void)paging_map_identity(page_directory_phys);
+
+    paging_pt_staging_init();
 }
 
 void paging_enable(void)
