@@ -1,6 +1,7 @@
 #include "mem/kmem.h"
 
 #include "log/kprint.h"
+#include "mem/kmem_utils.h"
 #include "mem/mem_layout.h"
 #include "mem/paging.h"
 #include "mem/phys_mem.h"
@@ -194,6 +195,18 @@ void *kmalloc(unsigned long size)
     }
 
     return 0;
+}
+
+void *kzalloc(unsigned long size)
+{
+    void *ptr;
+
+    ptr = kmalloc(size);
+    if (ptr == 0)
+        return 0;
+
+    kmemset(ptr, 0, size);
+    return ptr;
 }
 
 void kfree(void *ptr)
