@@ -28,17 +28,25 @@
  *
  * One mask tells the two apart.
  */
-#define PS2_BREAK_MASK  0x80
+#define PS2_BREAK_MASK      0x80
+#define PS2_SCAN_LSHIFT     0x2A
+#define PS2_SCAN_RSHIFT     0x36
+#define PS2_SCAN_CAPSLOCK   0x3A
 
 /*
- * Scan Code Set 1, unshifted, US QWERTY.
+ * Scan Code Set 1, US QWERTY: the character each key produces, indexed
+ * by make code. The caller masks the break bit off the scan code before
+ * indexing, so only 0x00-0x7F ever reach these arrays.
  *
- * Index is the make code, so an entry's position is its entire meaning
- * and nothing may be skipped. Zero means the key produces no character
- * (modifiers, function keys) and is dropped by the caller. Break codes
- * are filtered out before the lookup, so only 0x00-0x7F ever reach this
- * array; entries past the last initialiser are zero-filled by the compiler,
- * which is exactly right for CapsLock, the function keys and the keypad.
+ * An entry's position is its entire meaning and nothing may be skipped.
+ * Zero means the key produces no character (modifiers, function keys)
+ * and is dropped by the caller; entries past the last initialiser are
+ * zero-filled by the compiler, which is exactly right for Caps Lock, the
+ * function keys and the keypad.
+ *
+ * The two arrays are the unshifted and shifted faces of the same keys,
+ * so they must stay aligned slot for slot: the caller picks between them
+ * by Shift state and relies on identical indices meaning the same key.
  */
 static const char ps2_map[128] =
 {
@@ -52,9 +60,38 @@ static const char ps2_map[128] =
     0,    ' ',  0,                                   /* 0x38 */
 };
 
+static const char ps2_map_shift[128] =
+{
+    0,    0x1B, '!',  '@',  '#',  '$',  '%',  '^',   /* 0x00 */
+    '&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t',  /* 0x08 */
+    'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',   /* 0x10 */
+    'O',  'P',  '{',  '}',  '\n', 0,    'A',  'S',   /* 0x18 */
+    'D',  'F',  'G',  'H',  'J',  'K',  'L',  ':',   /* 0x20 */
+    '"',  '~',  0,    '|',  'Z',  'X',  'C',  'V',   /* 0x28 */
+    'B',  'N',  'M',  '<',  '>',  '?',  0,    '*',   /* 0x30 */
+    0,    ' ',  0,                                   /* 0x38 */
+};
+
+static unsigned char shift_down;
+static unsigned char caps_lock;
+
+/* Swap the case of an ASCII letter; leave digits, symbols and 0 untouched. */
+static char ps2_swap_case(char c)
+{
+    if (c >= 'a' && c <= 'z')
+        return (char)(c - ('a' - 'A'));
+
+    if (c >= 'A' && c <= 'Z')
+        return (char)(c + ('a' - 'A'));
+
+    return c;
+}
+
 static void ps2_keyboard_isr(interrupt_frame_t *frame)
 {
     unsigned char scancode;
+    unsigned char make;
+    unsigned char code;
     char c;
 
     (void)frame;
@@ -68,13 +105,46 @@ static void ps2_keyboard_isr(interrupt_frame_t *frame)
     scancode = io_inb(PS2_DATA_PORT);
     irq_ack(PS2_IRQ);
 
-    if (scancode & PS2_BREAK_MASK)
+    /*
+     * Split the press/release flag from the make code. Releases used to
+     * be discarded outright, but Shift has to be followed up as well as
+     * down, so we keep the make code and decide per key what to do.
+     */
+    make = (scancode & PS2_BREAK_MASK) == 0;
+    code = (unsigned char)(scancode & ~PS2_BREAK_MASK);
+
+    if (code == PS2_SCAN_LSHIFT || code == PS2_SCAN_RSHIFT)
+    {
+        shift_down = make;
+        return;
+    }
+
+    if (code == PS2_SCAN_CAPSLOCK)
+    {
+        /* A lock toggles once per press; the matching release is ignored. */
+        if (make)
+            caps_lock = !caps_lock;
+
+        return;
+    }
+
+    if (!make)
         return;
 
-    c = ps2_map[scancode];
+    c = (shift_down ? ps2_map_shift : ps2_map)[code];
 
-    if (c != 0)
-        keyboard_emit(c);
+    if (c == 0)
+        return;
+
+    /*
+     * Caps Lock flips letter case on top of Shift, so Shift and Caps Lock
+     * together land back on lowercase. It must not touch digits or
+     * symbols, which ps2_swap_case leaves unchanged.
+     */
+    if (caps_lock)
+        c = ps2_swap_case(c);
+
+    keyboard_emit(c);
 }
 
 void ps2_keyboard_init(void)
