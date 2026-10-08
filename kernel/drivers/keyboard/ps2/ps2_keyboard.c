@@ -8,6 +8,14 @@
 
 #define PS2_IRQ         1
 #define PS2_DATA_PORT   0x60
+#define PS2_STATUS_PORT 0x64
+
+/*
+ * Status register bit 0 (Output Buffer Full): set while a byte read by
+ * firmware or the keyboard is waiting in the data port, cleared the
+ * moment that byte is read out of PS2_DATA_PORT.
+ */
+#define PS2_STATUS_OBF  0x01
 
 /*
  * Bit 7 of a scan code marks a key release.
@@ -71,6 +79,21 @@ static void ps2_keyboard_isr(interrupt_frame_t *frame)
 
 void ps2_keyboard_init(void)
 {
+    /*
+     * Drain any byte the firmware left in the output buffer before
+     * unmasking the IRQ.
+     *
+     * The controller holds exactly one byte and raises IRQ1 only on the
+     * edge of a fresh byte arriving. A byte left over from POST (a self
+     * test result, a command ACK, a key pressed during boot) keeps the
+     * output buffer full: no new byte is accepted and no new edge is
+     * produced, so the first real key press would never reach the ISR
+     * and the keyboard looks dead. Reading PS2_DATA_PORT clears OBF; the
+     * loop guards against more than one stale byte being queued.
+     */
+    while (io_inb(PS2_STATUS_PORT) & PS2_STATUS_OBF)
+        (void)io_inb(PS2_DATA_PORT);
+
     isr_install_irq(PS2_IRQ, ps2_keyboard_isr);
     pic_unmask(PS2_IRQ);
 }
