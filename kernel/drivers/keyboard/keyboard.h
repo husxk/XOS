@@ -17,8 +17,7 @@ void keyboard_init(void);
 
 /*
  * Installs the consumer. Until one is installed, decoded characters
- * are dropped, so it is safe to call this before or after
- * keyboard_init().
+ * are dropped. Should be called after keyboard_init().
  */
 void keyboard_set_handler(keyboard_handler_t handler);
 

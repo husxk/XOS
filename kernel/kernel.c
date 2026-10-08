@@ -79,7 +79,7 @@ static void kernel_init(void)
 
     pic_init();
     ktimer_init();
-    
+
     keyboard_init();
     keyboard_set_handler(on_key);
 
