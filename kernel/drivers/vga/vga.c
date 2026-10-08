@@ -91,6 +91,24 @@ void vga_putchar(char c)
         return;
     }
 
+    if (c == '\b')
+    {
+        if (vga_col > 0)
+            vga_col--;
+        else if (vga_row > 0)
+        {
+            vga_row--;
+            vga_col = VGA_WIDTH - 1;
+        }
+        else
+            return;
+
+        volatile unsigned short *cell = VGA_MEMORY + vga_row * VGA_WIDTH + vga_col;
+
+        *cell = vga_entry(' ');
+        return;
+    }
+
     if (c == '\r')
     {
         vga_col = 0;
