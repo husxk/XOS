@@ -4,6 +4,7 @@
 #include "mem/kmem_utils.h"
 #include "mem/mem_layout.h"
 #include "mem/multiboot2.h"
+#include "mem/multiboot2_boot.h"
 #include "mem/phys_mem.h"
 
 #define PAGING_OFFSET_BITS 12u

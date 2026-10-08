@@ -8,6 +8,7 @@
 #include "mem/kmem.h"
 #include "mem/paging.h"
 #include "mem/phys_map.h"
+#include "mem/phys_map_kernel.h"
 #include "mem/phys_mem.h"
 #include "timer/timer.h"
 
@@ -61,7 +62,7 @@ static void heap_smoke_test(void)
 static void kernel_init(void)
 {
     kprint_init();
-    phys_map_init();
+    phys_map_kernel_init();
     phys_mem_init();
     paging_init();
 

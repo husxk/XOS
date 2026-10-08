@@ -1,5 +1,7 @@
 #pragma once
 
+#include "mem/multiboot2.h"
+
 #define PHYS_MAP_REGION_MAX 64
 
 struct phys_region
@@ -9,7 +11,7 @@ struct phys_region
     unsigned int type;
 };
 
-void phys_map_init(void);
+void phys_map_init_from_info(const struct multiboot_boot_info *info);
 
 unsigned int phys_map_region_count(void);
 

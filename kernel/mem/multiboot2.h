@@ -40,5 +40,3 @@ struct multiboot_boot_info
     unsigned int total_size;
     unsigned int reserved;
 };
-
-extern unsigned int multiboot2_info;

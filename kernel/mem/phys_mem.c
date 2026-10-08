@@ -3,6 +3,7 @@
 #include "log/kprint.h"
 #include "mem/kmem_utils.h"
 #include "mem/multiboot2.h"
+#include "mem/multiboot2_boot.h"
 #include "mem/phys_map.h"
 
 /*

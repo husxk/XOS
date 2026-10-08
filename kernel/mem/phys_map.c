@@ -1,7 +1,5 @@
 #include "mem/phys_map.h"
 
-#include "mem/multiboot2.h"
-
 static struct phys_region regions[PHYS_MAP_REGION_MAX];
 static unsigned int region_count;
 
@@ -56,18 +54,16 @@ static void ingest_mmap_tag(const struct multiboot_tag_mmap *mmap,
     }
 }
 
-void phys_map_init(void)
+void phys_map_init_from_info(const struct multiboot_boot_info *info)
 {
-    const struct multiboot_boot_info *info;
     const struct multiboot_tag *tag;
     const unsigned char *info_end;
 
     region_count = 0;
 
-    if (multiboot2_info == 0)
+    if (info == 0)
         return;
 
-    info = (const struct multiboot_boot_info *)(unsigned long)multiboot2_info;
     info_end = (const unsigned char *)info + info->total_size;
     tag = (const struct multiboot_tag *)(info + 1);
 
