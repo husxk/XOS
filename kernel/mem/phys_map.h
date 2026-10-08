@@ -11,6 +11,10 @@ struct phys_region
     unsigned int type;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void phys_map_init_from_info(const struct multiboot_boot_info *info);
 
 unsigned int phys_map_region_count(void);
@@ -22,3 +26,7 @@ unsigned long long phys_map_total_available(void);
 void phys_map_print(void);
 
 const char *phys_map_type_name(unsigned int type);
+
+#ifdef __cplusplus
+}
+#endif

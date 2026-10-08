@@ -39,6 +39,8 @@ static void ingest_mmap_tag(const struct multiboot_tag_mmap *mmap,
     const unsigned char *entry;
     const unsigned char *entries_end;
 
+    (void)info_end;
+
     if (mmap->entry_size < sizeof(struct multiboot_mmap_entry))
         return;
 

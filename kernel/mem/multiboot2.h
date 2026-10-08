@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Multiboot2 boot information (subset). See Multiboot2 spec. */
 
 #define MULTIBOOT2_BOOTLOADER_MAGIC 0x36d76289u
@@ -40,3 +44,7 @@ struct multiboot_boot_info
     unsigned int total_size;
     unsigned int reserved;
 };
+
+#ifdef __cplusplus
+}
+#endif
