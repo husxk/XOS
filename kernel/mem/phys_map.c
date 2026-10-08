@@ -1,6 +1,5 @@
 #include "mem/phys_map.h"
 
-#include "log/kprint.h"
 #include "mem/multiboot2.h"
 
 static struct phys_region regions[PHYS_MAP_REGION_MAX];
@@ -94,22 +93,6 @@ const struct phys_region *phys_map_region(unsigned int index)
     return &regions[index];
 }
 
-static void phys_map_print_size(unsigned long long bytes)
-{
-    if (bytes >= 1024ULL * 1024ULL)
-    {
-        kprint(" %llu MiB", bytes / (1024ULL * 1024ULL));
-    }
-    else if (bytes >= 1024ULL)
-    {
-        kprint(" %llu KiB", bytes / 1024ULL);
-    }
-    else
-    {
-        kprint(" %llu B", bytes);
-    }
-}
-
 const char *phys_map_type_name(unsigned int type)
 {
     switch (type)
@@ -146,31 +129,4 @@ unsigned long long phys_map_total_available(void)
     }
 
     return total;
-}
-
-void phys_map_print(void)
-{
-    unsigned int i;
-
-    if (region_count == 0)
-    {
-        kprint("phys map: (none - multiboot2_info missing or no mmap tag)\n");
-        return;
-    }
-
-    kprint("phys map regions:\n");
-
-    for (i = 0; i < region_count; i++)
-    {
-        kprint("  0x%016llx + 0x%016llx type %u %s",
-               regions[i].base, regions[i].length,
-               regions[i].type, phys_map_type_name(regions[i].type));
-        phys_map_print_size(regions[i].length);
-        kputs("\n");
-    }
-
-    unsigned long long total = phys_map_total_available();
-    unsigned long long mib = total / (1024ULL * 1024ULL);
-
-    kprint("available RAM: 0x%016llx bytes (%llu MiB)\n", total, mib);
 }
