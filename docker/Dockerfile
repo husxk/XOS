@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nasm \
     make \
     cmake \
+    libgtest-dev \
     file \
     grub-common \
     grub-pc-bin \
