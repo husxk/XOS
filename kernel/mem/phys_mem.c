@@ -1,7 +1,7 @@
 #include "mem/phys_mem.h"
 
-#include "log/kprint.h"
 #include "mem/kmem_utils.h"
+#include "mem/phys_mem_err.h"
 #include "mem/multiboot2.h"
 #include "mem/multiboot2_boot.h"
 #include "mem/phys_map.h"
@@ -449,7 +449,7 @@ static void phys_mem_reset_state(void)
     phys_mem_alloc_hint = 0;
 }
 
-void phys_mem_init(void)
+int phys_mem_init(void)
 {
     unsigned long bitmap_storage_base;
     unsigned long bitmap_page_span;
@@ -457,13 +457,12 @@ void phys_mem_init(void)
     phys_mem_scan_max_frame();
 
     if (phys_mem_frame_total == 0)
-        return;
+        return PHYS_MEM_ENOMAP;
 
     if (!phys_mem_boot_alloc_bitmap(&bitmap_storage_base))
     {
-        kprint("phys_mem: no space for bitmap\n");
         phys_mem_reset_state();
-        return;
+        return PHYS_MEM_ENOSPC;
     }
 
     bitmap_page_span = phys_mem_bitmap_page_span(phys_mem_bitmap_size_bytes);
@@ -479,6 +478,20 @@ void phys_mem_init(void)
     phys_mem_apply_fixed_reserves();
 
     phys_mem_free_count = phys_mem_recount_free_frames();
+    return PHYS_MEM_OK;
+}
+
+void phys_mem_stats(unsigned long *frame_total, unsigned long *free_count,
+                    unsigned long *bitmap_size_bytes)
+{
+    if (frame_total != 0)
+        *frame_total = phys_mem_frame_total;
+
+    if (free_count != 0)
+        *free_count = phys_mem_free_count;
+
+    if (bitmap_size_bytes != 0)
+        *bitmap_size_bytes = phys_mem_bitmap_size_bytes;
 }
 
 void phys_mem_bitmap_storage_span(unsigned long *base, unsigned long *page_span)
@@ -592,60 +605,34 @@ void *phys_mem_alloc_page(void)
     return phys_mem_alloc_pages(1);
 }
 
-void phys_mem_free_pages(void *base, unsigned long page_count)
+int phys_mem_free_pages(void *base, unsigned long page_count)
 {
     unsigned long phys = (unsigned long)base;
     unsigned long frame;
     unsigned long i;
 
     if (page_count == 0)
-        return;
+        return PHYS_MEM_EINVAL;
 
     if ((phys & (PHYS_MEM_PAGE_SIZE - 1u)) != 0u)
-    {
-        kprint("phys_mem: free ignored (unaligned)\n");
-        return;
-    }
+        return PHYS_MEM_EINVAL;
 
     if (!phys_mem_phys_to_frame(phys, &frame))
-    {
-        kprint("phys_mem: free ignored (out of range)\n");
-        return;
-    }
+        return PHYS_MEM_ERANGE;
 
     if (!phys_mem_run_fits(frame, page_count))
-    {
-        kprint("phys_mem: free ignored (out of range)\n");
-        return;
-    }
+        return PHYS_MEM_ERANGE;
 
     if (!phys_mem_run_is_used(frame, page_count))
-    {
-        kprint("phys_mem: free ignored (not allocated)\n");
-        return;
-    }
+        return PHYS_MEM_ESTATE;
 
     for (i = 0; i < page_count; i++)
         phys_mem_set_frame_used(frame + i, 0);
+
+    return PHYS_MEM_OK;
 }
 
-void phys_mem_free_page(void *page)
+int phys_mem_free_page(void *page)
 {
-    phys_mem_free_pages(page, 1);
-}
-
-void phys_mem_print_stats(void)
-{
-    unsigned long used;
-
-    if (phys_mem_frame_total >= phys_mem_free_count)
-        used = phys_mem_frame_total - phys_mem_free_count;
-    else
-        used = 0;
-
-    kprint("phys_mem: frames %lu free %lu used %lu bitmap_size_bytes 0x%x\n",
-           phys_mem_frame_total,
-           phys_mem_free_count,
-           used,
-           (unsigned int)phys_mem_bitmap_size_bytes);
+    return phys_mem_free_pages(page, 1);
 }

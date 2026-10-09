@@ -10,6 +10,8 @@
 #include "mem/phys_map.h"
 #include "mem/phys_map_kernel.h"
 #include "mem/phys_mem.h"
+#include "mem/phys_mem_kernel.h"
+#include "mem/phys_mem_print.h"
 #include "timer/timer.h"
 
 #define TICK_REPORT_MS (10u * 1000u)
@@ -63,7 +65,7 @@ static void kernel_init(void)
 {
     kprint_init();
     phys_map_kernel_init();
-    phys_mem_init();
+    phys_mem_kernel_init();
     paging_init();
 
     idt_init();
