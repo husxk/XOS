@@ -16,6 +16,7 @@ set(XOS_KERNEL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../kernel")
 set(XOS_KERNEL_LIB_SOURCES
     "${XOS_KERNEL_DIR}/mem/kmem_utils.c"
     "${XOS_KERNEL_DIR}/mem/phys_map.c"
+    "${XOS_KERNEL_DIR}/mem/phys_mem.c"
 )
 
 add_library(xos_kernel_library STATIC ${XOS_KERNEL_LIB_SOURCES})
@@ -26,6 +27,7 @@ target_compile_options(xos_kernel_library PRIVATE -Wall -Wextra)
 set(XOS_TEST_SOURCES
     kmem/kmem-utils-test.cpp
     mem/phys-map-test.cpp
+    mem/phys-mem-test.cpp
 )
 
 add_executable(xos_test ${XOS_TEST_SOURCES})
