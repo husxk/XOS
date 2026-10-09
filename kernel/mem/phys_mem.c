@@ -2,8 +2,6 @@
 
 #include "mem/kmem_utils.h"
 #include "mem/phys_mem_err.h"
-#include "mem/multiboot2.h"
-#include "mem/multiboot2_boot.h"
 #include "mem/phys_map.h"
 
 /*
@@ -14,10 +12,6 @@
  * not a cap on how much RAM the machine has.
  */
 #define PHYS_MEM_ADDR_CAP (1ULL << 32)
-
-extern char _end[];
-extern char stack_bottom[];
-extern char stack_top[];
 
 static unsigned char *phys_mem_bitmap;
 static unsigned long phys_mem_bitmap_storage_base;
@@ -243,59 +237,20 @@ static void phys_mem_mark_range_free(unsigned long base, unsigned long length)
     phys_mem_mark_range(base, length, 0);
 }
 
-static void phys_mem_reserve_kernel_image(void)
+static void phys_mem_apply_reserves(const struct phys_mem_init_params *params)
 {
-    unsigned long start = KERNEL_LOAD_PHYS;
-    unsigned long end = (unsigned long)&_end;
-
-    if (end <= start)
+    if (params->reserved == 0)
         return;
 
-    phys_mem_mark_range_used(start, end - start);
-}
+    for (unsigned int i = 0; i < params->reserved_count; i++)
+    {
+        const struct phys_mem_reserved_range *range = &params->reserved[i];
 
-static void phys_mem_reserve_kernel_stack(void)
-{
-    unsigned long start = (unsigned long)&stack_bottom;
-    unsigned long end = (unsigned long)&stack_top;
+        if (range->length == 0)
+            continue;
 
-    if (end <= start)
-        return;
-
-    phys_mem_mark_range_used(start, end - start);
-}
-
-static void phys_mem_reserve_multiboot_info(void)
-{
-    const struct multiboot_boot_info *info;
-    unsigned long info_start;
-    unsigned long info_end;
-
-    if (multiboot2_info == 0)
-        return;
-
-    info = (const struct multiboot_boot_info *)(unsigned long)multiboot2_info;
-    info_start = (unsigned long)phys_mem_align_down_u64((unsigned long long)multiboot2_info);
-    info_end = (unsigned long)phys_mem_align_up_u64((unsigned long long)multiboot2_info +
-                                                    (unsigned long long)info->total_size);
-
-    if (info_end <= info_start)
-        return;
-
-    phys_mem_mark_range_used(info_start, info_end - info_start);
-}
-
-static void phys_mem_apply_fixed_reserves(void)
-{
-    /*
-     * Never hand out physical page 0: (void *)0x0 is NULL, so alloc cannot
-     * return it without a separate error channel.
-     */
-    phys_mem_mark_range_used(0, PHYS_MEM_PAGE_SIZE);
-
-    phys_mem_reserve_kernel_image();
-    phys_mem_reserve_kernel_stack();
-    phys_mem_reserve_multiboot_info();
+        phys_mem_mark_range_used(range->base, range->length);
+    }
 }
 
 /*
@@ -307,12 +262,11 @@ static void phys_mem_scan_max_frame(void)
 {
     unsigned int region_count = phys_map_region_count();
     unsigned long long max_end = 0;
-    unsigned int i;
 
     phys_mem_max_frame = 0;
     phys_mem_frame_total = 0;
 
-    for (i = 0; i < region_count; i++)
+    for (unsigned int i = 0; i < region_count; i++)
     {
         const struct phys_region *region = phys_map_region(i);
         unsigned long long end;
@@ -359,7 +313,8 @@ static unsigned long phys_mem_bitmap_page_span(unsigned long bitmap_byte_length)
 /*
  * Pick a physical address for the bitmap before the PMM is operational
  */
-static int phys_mem_boot_alloc_bitmap(unsigned long *bitmap_storage_base)
+static int phys_mem_boot_alloc_bitmap(unsigned long min_start,
+                                      unsigned long *bitmap_storage_base)
 {
     unsigned long bitmap_byte_length =
         phys_mem_bitmap_byte_length(phys_mem_frame_total);
@@ -368,12 +323,10 @@ static int phys_mem_boot_alloc_bitmap(unsigned long *bitmap_storage_base)
         phys_mem_bitmap_page_span(bitmap_byte_length);
 
     unsigned int region_count = phys_map_region_count();
-    unsigned long min_start = phys_mem_align_up((unsigned long)&_end);
-    unsigned int i;
 
     phys_mem_bitmap_size_bytes = bitmap_byte_length;
 
-    for (i = 0; i < region_count; i++)
+    for (unsigned int i = 0; i < region_count; i++)
     {
         const struct phys_region *region = phys_map_region(i);
         unsigned long long region_end;
@@ -407,9 +360,8 @@ static int phys_mem_boot_alloc_bitmap(unsigned long *bitmap_storage_base)
 static void phys_mem_mark_available_from_map(void)
 {
     unsigned int region_count = phys_map_region_count();
-    unsigned int i;
 
-    for (i = 0; i < region_count; i++)
+    for (unsigned int i = 0; i < region_count; i++)
     {
         const struct phys_region *region = phys_map_region(i);
         unsigned long base;
@@ -449,33 +401,40 @@ static void phys_mem_reset_state(void)
     phys_mem_alloc_hint = 0;
 }
 
-int phys_mem_init(void)
+int phys_mem_init_from_params(const struct phys_mem_init_params *params)
 {
     unsigned long bitmap_storage_base;
     unsigned long bitmap_page_span;
 
+    if (params == 0)
+        return PHYS_MEM_EINVAL;
+
+    phys_mem_reset_state();
     phys_mem_scan_max_frame();
 
     if (phys_mem_frame_total == 0)
         return PHYS_MEM_ENOMAP;
 
-    if (!phys_mem_boot_alloc_bitmap(&bitmap_storage_base))
+    phys_mem_bitmap_size_bytes = phys_mem_bitmap_byte_length(phys_mem_frame_total);
+    bitmap_page_span = phys_mem_bitmap_page_span(phys_mem_bitmap_size_bytes);
+
+    if (!phys_mem_boot_alloc_bitmap(params->bitmap_min_phys, &bitmap_storage_base))
     {
         phys_mem_reset_state();
         return PHYS_MEM_ENOSPC;
     }
 
-    bitmap_page_span = phys_mem_bitmap_page_span(phys_mem_bitmap_size_bytes);
+    phys_mem_bitmap = (unsigned char *)(unsigned long)bitmap_storage_base;
+
     phys_mem_bitmap_storage_base = bitmap_storage_base;
     phys_mem_bitmap_storage_page_span = bitmap_page_span;
-    phys_mem_bitmap = (unsigned char *)(unsigned long)bitmap_storage_base;
     kmemset(phys_mem_bitmap, 0xFF, phys_mem_bitmap_size_bytes);
 
     phys_mem_mark_available_from_map();
 
     /* Reserve every page the bitmap occupies (page_span), not just byte_length. */
     phys_mem_mark_range_used(bitmap_storage_base, bitmap_page_span);
-    phys_mem_apply_fixed_reserves();
+    phys_mem_apply_reserves(params);
 
     phys_mem_free_count = phys_mem_recount_free_frames();
     return PHYS_MEM_OK;
@@ -512,9 +471,7 @@ void phys_mem_bitmap_storage_span(unsigned long *base, unsigned long *page_span)
 
 static int phys_mem_run_is_free(unsigned long start_frame, unsigned long page_count)
 {
-    unsigned long i;
-
-    for (i = 0; i < page_count; i++)
+    for (unsigned long i = 0; i < page_count; i++)
     {
         if (phys_mem_frame_is_used(start_frame + i))
             return 0;
@@ -525,9 +482,7 @@ static int phys_mem_run_is_free(unsigned long start_frame, unsigned long page_co
 
 static int phys_mem_run_is_used(unsigned long start_frame, unsigned long page_count)
 {
-    unsigned long i;
-
-    for (i = 0; i < page_count; i++)
+    for (unsigned long i = 0; i < page_count; i++)
     {
         if (!phys_mem_frame_is_used(start_frame + i))
             return 0;
@@ -545,9 +500,7 @@ static void phys_mem_set_alloc_hint_after(unsigned long last_frame)
 
 static void *phys_mem_take_frames(unsigned long start_frame, unsigned long page_count)
 {
-    unsigned long i;
-
-    for (i = 0; i < page_count; i++)
+    for (unsigned long i = 0; i < page_count; i++)
         phys_mem_set_frame_used(start_frame + i, 1);
 
     phys_mem_set_alloc_hint_after(start_frame + page_count - 1u);
@@ -609,7 +562,6 @@ int phys_mem_free_pages(void *base, unsigned long page_count)
 {
     unsigned long phys = (unsigned long)base;
     unsigned long frame;
-    unsigned long i;
 
     if (page_count == 0)
         return PHYS_MEM_EINVAL;
@@ -626,7 +578,7 @@ int phys_mem_free_pages(void *base, unsigned long page_count)
     if (!phys_mem_run_is_used(frame, page_count))
         return PHYS_MEM_ESTATE;
 
-    for (i = 0; i < page_count; i++)
+    for (unsigned long i = 0; i < page_count; i++)
         phys_mem_set_frame_used(frame + i, 0);
 
     return PHYS_MEM_OK;
