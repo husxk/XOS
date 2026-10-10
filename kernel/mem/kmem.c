@@ -1,10 +1,6 @@
 #include "mem/kmem.h"
 
-#include "log/kprint.h"
 #include "mem/kmem_utils.h"
-#include "mem/mem_layout.h"
-#include "mem/paging.h"
-#include "mem/phys_mem.h"
 
 #define KHEAP_ALLOC_ALIGN 8u
 
@@ -109,49 +105,34 @@ static void kheap_coalesce(struct kheap_block *block)
     }
 }
 
-static int kheap_map_region(void)
-{
-    unsigned long i;
-
-    for (i = 0; i < KERNEL_HEAP_PAGE_COUNT; i++)
-    {
-        unsigned long virt = KERNEL_HEAP_BASE + i * XOS_PAGE_SIZE;
-        void *phys = phys_mem_alloc_page();
-
-        if (phys == 0)
-        {
-            kprint("kheap: phys page alloc failed at index %u\n", (unsigned int)i);
-            return 0;
-        }
-
-        if (!paging_map_page(virt, (unsigned long)phys))
-        {
-            kprint("kheap: map failed virt 0x%x phys 0x%x\n",
-                   (unsigned int)virt, (unsigned int)(unsigned long)phys);
-            phys_mem_free_pages(phys, 1);
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-void kheap_init(void)
+int kheap_init_from_params(const struct kheap_init_params *params)
 {
     struct kheap_block *initial;
+    unsigned char *arena;
+    unsigned long size;
 
-    kheap_begin = (unsigned char *)(unsigned long)KERNEL_HEAP_BASE;
-    kheap_limit = kheap_begin + KERNEL_HEAP_SIZE;
+    if (params == 0 || params->arena == 0)
+        return KHEAP_EINVAL;
+
+    size = params->size;
+    if (size < KHEAP_MIN_BLOCK_SIZE)
+        return KHEAP_EINVAL;
+
+    arena = (unsigned char *)params->arena;
+    if (((unsigned long)arena & (KHEAP_ALLOC_ALIGN - 1u)) != 0u)
+        return KHEAP_EINVAL;
+
+    kheap_begin = arena;
+    kheap_limit = arena + size;
     kheap_free_list = 0;
 
-    if (!kheap_map_region())
-        return;
-
     initial = kheap_block_at(kheap_begin);
-    initial->size = KERNEL_HEAP_SIZE;
+    initial->size = size;
     initial->free = 1;
     initial->next_free = 0;
     kheap_free_list = initial;
+
+    return KHEAP_OK;
 }
 
 void *kmalloc(unsigned long size)
