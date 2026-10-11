@@ -87,12 +87,55 @@ static char ps2_swap_case(char c)
     return c;
 }
 
+static int ps2_decode(unsigned char scancode)
+{
+    /*
+     * Split the press/release flag from the make code. Releases used to
+     * be discarded outright, but Shift has to be followed up as well as
+     * down, so we keep the make code and decide per key what to do.
+     */
+    unsigned char make = (scancode & PS2_BREAK_MASK) == 0;
+    unsigned char code = (unsigned char)(scancode & ~PS2_BREAK_MASK);
+    char c;
+
+    if (code == PS2_SCAN_LSHIFT || code == PS2_SCAN_RSHIFT)
+    {
+        shift_down = make;
+        return -1;
+    }
+
+    if (code == PS2_SCAN_CAPSLOCK)
+    {
+        /* A lock toggles once per press; the matching release is ignored. */
+        if (make)
+            caps_lock = !caps_lock;
+
+        return -1;
+    }
+
+    if (!make)
+        return -1;
+
+    c = (shift_down ? ps2_map_shift : ps2_map)[code];
+
+    if (c == 0)
+        return -1;
+
+    /*
+     * Caps Lock flips letter case on top of Shift, so Shift and Caps Lock
+     * together land back on lowercase. It must not touch digits or
+     * symbols, which ps2_swap_case leaves unchanged.
+     */
+    if (caps_lock)
+        c = ps2_swap_case(c);
+
+    return (unsigned char)c;
+}
+
 static void ps2_keyboard_isr(interrupt_frame_t *frame)
 {
     unsigned char scancode;
-    unsigned char make;
-    unsigned char code;
-    char c;
+    int c;
 
     (void)frame;
 
@@ -105,46 +148,10 @@ static void ps2_keyboard_isr(interrupt_frame_t *frame)
     scancode = io_inb(PS2_DATA_PORT);
     irq_ack(PS2_IRQ);
 
-    /*
-     * Split the press/release flag from the make code. Releases used to
-     * be discarded outright, but Shift has to be followed up as well as
-     * down, so we keep the make code and decide per key what to do.
-     */
-    make = (scancode & PS2_BREAK_MASK) == 0;
-    code = (unsigned char)(scancode & ~PS2_BREAK_MASK);
+    c = ps2_decode(scancode);
 
-    if (code == PS2_SCAN_LSHIFT || code == PS2_SCAN_RSHIFT)
-    {
-        shift_down = make;
-        return;
-    }
-
-    if (code == PS2_SCAN_CAPSLOCK)
-    {
-        /* A lock toggles once per press; the matching release is ignored. */
-        if (make)
-            caps_lock = !caps_lock;
-
-        return;
-    }
-
-    if (!make)
-        return;
-
-    c = (shift_down ? ps2_map_shift : ps2_map)[code];
-
-    if (c == 0)
-        return;
-
-    /*
-     * Caps Lock flips letter case on top of Shift, so Shift and Caps Lock
-     * together land back on lowercase. It must not touch digits or
-     * symbols, which ps2_swap_case leaves unchanged.
-     */
-    if (caps_lock)
-        c = ps2_swap_case(c);
-
-    keyboard_emit(c);
+    if (c >= 0)
+        keyboard_emit((char)c);
 }
 
 void ps2_keyboard_init(void)
