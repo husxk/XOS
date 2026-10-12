@@ -2,6 +2,7 @@ set(_KERNEL_ELF_SOURCES
     kernel.c cpu/idt.c cpu/isr.c cpu/pic.c drivers/timer/pit.c timer/timer.c
     drivers/keyboard/keyboard.c drivers/keyboard/ps2/ps2_keyboard.c
     drivers/vga/vga.c mem/kmem.c mem/kmem_kernel.c mem/kmem_print.c mem/kmem_utils.c mem/paging.c mem/phys_map.c mem/phys_map_kernel.c mem/phys_map_print.c mem/phys_mem.c mem/phys_mem_kernel.c mem/phys_mem_print.c log/kprint.c
+    kthread/kthread.c
 )
 
 if(NOT MB2_HEADER_O)
@@ -13,6 +14,8 @@ set(START_ASM "${CMAKE_CURRENT_SOURCE_DIR}/start_kernel.asm")
 set(START_O   "${CMAKE_CURRENT_BINARY_DIR}/start_kernel.o")
 set(ISR_ASM   "${CMAKE_CURRENT_SOURCE_DIR}/cpu/isr.asm")
 set(ISR_O     "${CMAKE_CURRENT_BINARY_DIR}/isr.o")
+set(SWITCH_ASM "${CMAKE_CURRENT_SOURCE_DIR}/kthread/switch.asm")
+set(SWITCH_O   "${CMAKE_CURRENT_BINARY_DIR}/switch.o")
 set(KERNEL_ELF "${CMAKE_CURRENT_BINARY_DIR}/kernel.elf")
 set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker.ld")
 
@@ -36,11 +39,21 @@ add_custom_command(
 
 add_custom_target(isr_o DEPENDS "${ISR_O}")
 
-add_executable(kernel_elf "${START_O}" "${ISR_O}" ${_KERNEL_ELF_SOURCES})
+add_custom_command(
+    OUTPUT "${SWITCH_O}"
+    COMMAND "${XOS_NASM}" -f elf32 "${SWITCH_ASM}" -o "${SWITCH_O}"
+    DEPENDS "${SWITCH_ASM}"
+    COMMENT "Assembling thread context switch (elf32)"
+    VERBATIM
+)
+
+add_custom_target(switch_o DEPENDS "${SWITCH_O}")
+
+add_executable(kernel_elf "${START_O}" "${ISR_O}" "${SWITCH_O}" ${_KERNEL_ELF_SOURCES})
 
 target_include_directories(kernel_elf PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_dependencies(kernel_elf start_kernel_o isr_o)
+add_dependencies(kernel_elf start_kernel_o isr_o switch_o)
 set_target_properties(kernel_elf PROPERTIES
     OUTPUT_NAME kernel
     SUFFIX .elf

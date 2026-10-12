@@ -14,8 +14,7 @@
 #include "mem/phys_mem_print.h"
 #include "timer/timer.h"
 #include "drivers/vga/vga.h"
-
-#define TICK_REPORT_MS (10u * 1000u)
+#include "kthread/kthread.h"
 
 static const char msg[] = "Hello from kernel!\n";
 
@@ -67,6 +66,35 @@ static void on_key(char c)
     vga_putchar(c);
 }
 
+struct demo_kthread_params
+{
+    int id;
+    time_t delay_ms;
+};
+
+static struct demo_kthread_params demo_kthread_a = { 0, (time_t)1000 };
+static struct demo_kthread_params demo_kthread_b = { 1, (time_t)2000 };
+
+static void demo_kthread(void *arg)
+{
+    struct demo_kthread_params *p = arg;
+
+    for (;;)
+    {
+        time_t ticks_before = ktimer_ticks();
+
+        kprint("kthread demo %d: timeout %u ms, ticks %u\n",
+               p->id, (unsigned int)p->delay_ms, (unsigned int)ticks_before);
+
+        ksleep_ms(p->delay_ms);
+
+        kprint("kthread demo %d: done, ticks %u\n",
+               p->id, (unsigned int)ktimer_ticks());
+
+        kthread_yield();
+    }
+}
+
 static void kernel_init(void)
 {
     kprint_init();
@@ -79,6 +107,7 @@ static void kernel_init(void)
     paging_enable();
 
     kheap_init();
+    kthread_init();
 
     pic_init();
     ktimer_init();
@@ -113,12 +142,11 @@ void kernel_main(void)
     phys_mem_print_stats();
     heap_smoke_test();
 
-    for (;;)
-    {
-        time_t ticks;
+    if (kthread_create(demo_kthread, &demo_kthread_a) == KTHREAD_ID_NONE)
+        kprint("kthread demo: create 0 failed\n");
 
-        ksleep_ms((time_t)TICK_REPORT_MS);
-        ticks = ktimer_ticks();
-        kprint("ticks %u\n", (unsigned int)ticks);
-    }
+    if (kthread_create(demo_kthread, &demo_kthread_b) == KTHREAD_ID_NONE)
+        kprint("kthread demo: create 1 failed\n");
+
+    kthread_run();
 }
