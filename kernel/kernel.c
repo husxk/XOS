@@ -81,7 +81,7 @@ static void demo_kthread(void *arg)
 
     for (;;)
     {
-        time_t ticks_before = ktimer_ticks();
+        tick_t ticks_before = ktimer_ticks();
 
         kprint("kthread demo %d: timeout %u ms, ticks %u\n",
                p->id, (unsigned int)p->delay_ms, (unsigned int)ticks_before);
@@ -90,8 +90,6 @@ static void demo_kthread(void *arg)
 
         kprint("kthread demo %d: done, ticks %u\n",
                p->id, (unsigned int)ktimer_ticks());
-
-        kthread_yield();
     }
 }
 

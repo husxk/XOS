@@ -1,7 +1,10 @@
 #include "kthread/kthread.h"
 
+#include "cpu/irq_guard.h"
 #include "log/kprint.h"
 #include "mem/kmem.h"
+#include "timer/tick.h"
+#include "util/min_heap.h"
 
 extern void thread_switch(unsigned int *save_sp, unsigned int new_sp);
 
@@ -9,12 +12,30 @@ enum kthread_state
 {
     KTHREAD_RUNNABLE,
     KTHREAD_RUNNING,
+    KTHREAD_BLOCKED,
     KTHREAD_DEAD,
+};
+
+enum kthread_block_kind
+{
+    KTHREAD_BLOCK_KIND_NONE,
+    KTHREAD_BLOCK_KIND_INTERRUPTIBLE,
+    KTHREAD_BLOCK_KIND_UNINTERRUPTIBLE,
+};
+
+enum kthread_block_reason
+{
+    KTHREAD_BLOCK_REASON_NONE,
+    KTHREAD_BLOCK_REASON_SLEEP,
 };
 
 struct kthread
 {
     enum kthread_state state;
+    enum kthread_block_kind block_kind;
+    enum kthread_block_reason block_reason;
+    tick_t wake_at_ticks;
+    int sleep_heap_idx;
     void *stack_base;
     unsigned long stack_size;
     unsigned int saved_sp;
@@ -28,7 +49,48 @@ static unsigned int scheduler_saved_sp;
 static int kthread_reap_after_switch;
 static unsigned int kthread_discard_sp;
 
+static min_heap_t kthread_sleep_heap;
+
 static void kthread_trampoline(void);
+
+static void kthread_block_reset(struct kthread *t)
+{
+    t->block_kind = KTHREAD_BLOCK_KIND_NONE;
+    t->block_reason = KTHREAD_BLOCK_REASON_NONE;
+    t->wake_at_ticks = 0;
+    t->sleep_heap_idx = MIN_HEAP_IDX_NONE;
+}
+
+static void kthread_sleep_heap_set_index(void *item, int idx)
+{
+    struct kthread *t = (struct kthread *)item;
+
+    t->sleep_heap_idx = idx;
+}
+
+static int kthread_sleep_cmp(const void *a, const void *b)
+{
+    const struct kthread *ta = (const struct kthread *)a;
+    const struct kthread *tb = (const struct kthread *)b;
+
+    if (ta->wake_at_ticks < tb->wake_at_ticks)
+        return -1;
+
+    if (ta->wake_at_ticks > tb->wake_at_ticks)
+        return 1;
+
+    return 0;
+}
+
+static void kthread_leave_sleep_heap(struct kthread *t)
+{
+    if (t->sleep_heap_idx == MIN_HEAP_IDX_NONE)
+        return;
+
+    cpu_irq_disable();
+    min_heap_remove(&kthread_sleep_heap, t->sleep_heap_idx);
+    cpu_irq_enable();
+}
 
 static int kthread_id_valid(int id)
 {
@@ -127,6 +189,7 @@ static void kthread_reap_if_needed(void)
     t->saved_sp = 0;
     t->fn = 0;
     t->arg = 0;
+    kthread_block_reset(t);
     t->state = KTHREAD_DEAD;
 }
 
@@ -143,7 +206,16 @@ static void kthread_schedule(void)
     if (next == KTHREAD_ID_NONE)
     {
         for (;;)
-            __asm__ volatile("hlt");
+        {
+            cpu_irq_enable();
+            cpu_halt();
+
+            kthread_reap_if_needed();
+            next = kthread_find_next_runnable(KTHREAD_ID_NONE);
+
+            if (next != KTHREAD_ID_NONE)
+                break;
+        }
     }
 
     struct kthread *nt = kthread_get(next);
@@ -168,12 +240,13 @@ static void kthread_switch_away(unsigned int *save_sp)
         kthread_current_id = next;
         nt->state = KTHREAD_RUNNING;
         thread_switch(save_sp, nt->saved_sp);
+        return;
     }
 
     if (scheduler_saved_sp == 0)
     {
         kprint("kthread: nowhere to switch\n");
-        __asm__ volatile("hlt");
+        cpu_halt();
     }
 
     thread_switch(save_sp, scheduler_saved_sp);
@@ -198,6 +271,8 @@ void kthread_init(void)
     scheduler_saved_sp = 0;
     kthread_reap_after_switch = KTHREAD_ID_NONE;
 
+    min_heap_init(&kthread_sleep_heap, kthread_sleep_cmp, kthread_sleep_heap_set_index);
+
     for (unsigned int i = 0; i < KTHREAD_MAX; i++)
     {
         kthread_table[i].state = KTHREAD_DEAD;
@@ -206,6 +281,7 @@ void kthread_init(void)
         kthread_table[i].saved_sp = 0;
         kthread_table[i].fn = 0;
         kthread_table[i].arg = 0;
+        kthread_block_reset(&kthread_table[i]);
     }
 }
 
@@ -235,6 +311,7 @@ int kthread_create(void (*fn)(void *arg), void *arg)
     struct kthread *t = kthread_get(id);
 
     t->state = KTHREAD_RUNNABLE;
+    kthread_block_reset(t);
     t->stack_base = stack;
     t->stack_size = KTHREAD_STACK_SIZE;
     t->saved_sp = sp;
@@ -254,6 +331,9 @@ void kthread_exit(void)
     }
 
     struct kthread *t = kthread_get(kthread_current_id);
+
+    if (t->state == KTHREAD_BLOCKED && t->block_reason == KTHREAD_BLOCK_REASON_SLEEP)
+        kthread_leave_sleep_heap(t);
 
     t->state = KTHREAD_DEAD;
     kthread_reap_after_switch = kthread_current_id;
@@ -292,6 +372,55 @@ void kthread_yield(void)
     nt->state = KTHREAD_RUNNING;
     thread_switch(&t->saved_sp, nt->saved_sp);
     kthread_reap_if_needed();
+}
+
+void kthread_sleep_interruptible_until(tick_t wake_at_ticks)
+{
+    kthread_reap_if_needed();
+
+    if (!kthread_id_valid(kthread_current_id))
+        return;
+
+    struct kthread *t = kthread_get(kthread_current_id);
+
+    t->wake_at_ticks = wake_at_ticks;
+    t->block_kind = KTHREAD_BLOCK_KIND_INTERRUPTIBLE;
+    t->block_reason = KTHREAD_BLOCK_REASON_SLEEP;
+    t->state = KTHREAD_BLOCKED;
+
+    cpu_irq_disable();
+
+    if (min_heap_push(&kthread_sleep_heap, t) != 0)
+    {
+        cpu_irq_enable();
+        kprint("kthread: sleep heap push failed\n");
+        t->state = KTHREAD_RUNNING;
+        kthread_block_reset(t);
+        return;
+    }
+
+    cpu_irq_enable();
+
+    kthread_switch_away(&t->saved_sp);
+    kthread_reap_if_needed();
+}
+
+void kthread_on_tick(tick_t now)
+{
+    for (;;)
+    {
+        struct kthread *t = (struct kthread *)min_heap_peek(&kthread_sleep_heap);
+
+        if (t == 0 || t->wake_at_ticks > now)
+            break;
+
+        min_heap_pop(&kthread_sleep_heap);
+        if (t->state != KTHREAD_BLOCKED)
+            continue;
+
+        kthread_block_reset(t);
+        t->state = KTHREAD_RUNNABLE;
+    }
 }
 
 void kthread_run(void)

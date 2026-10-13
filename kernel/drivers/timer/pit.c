@@ -4,6 +4,7 @@
 #include "cpu/irq.h"
 #include "cpu/isr.h"
 #include "cpu/pic.h"
+#include "timer/timer.h"
 
 #define PIT_IRQ            0
 #define PIT_BASE_HZ        1193182
@@ -13,13 +14,14 @@
 /* 8254 control word (port 0x43): 7–6 channel | 5–4 access | 3–1 mode | 0 BCD. */
 #define PIT_CMD_CH0_MODE3 0b00110110 /* 00 ch0 | 11 lobyte+hibyte | 011 mode 3 | 0 binary */
 
-static volatile time_t pit_tick_count;
+static volatile tick_t pit_tick_count;
 
 static void pit_isr(interrupt_frame_t *frame)
 {
     (void)frame;
 
     pit_tick_count++;
+    ktimer_on_tick();
     irq_ack(PIT_IRQ);
 }
 
@@ -49,7 +51,7 @@ void pit_init(void)
     pic_unmask(PIT_IRQ);
 }
 
-time_t pit_ticks(void)
+tick_t pit_ticks(void)
 {
     return pit_tick_count;
 }
