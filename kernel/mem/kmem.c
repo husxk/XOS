@@ -57,6 +57,29 @@ static struct kheap_block *kheap_block_at(unsigned char *addr)
     return (struct kheap_block *)(void *)addr;
 }
 
+static unsigned long kheap_payload_size(const struct kheap_block *block)
+{
+    return block->size - KHEAP_BLOCK_HEADER_SIZE;
+}
+
+static struct kheap_block *kheap_block_from_ptr(void *ptr)
+{
+    struct kheap_block *block;
+
+    if (ptr == 0)
+        return 0;
+
+    block = kheap_block_at((unsigned char *)ptr - KHEAP_BLOCK_HEADER_SIZE);
+
+    if ((unsigned char *)block < kheap_begin || (unsigned char *)block >= kheap_limit)
+        return 0;
+
+    if (block->free)
+        return 0;
+
+    return block;
+}
+
 static struct kheap_block *kheap_next_physical(struct kheap_block *block)
 {
     unsigned char *next;
@@ -178,6 +201,84 @@ void *kmalloc(unsigned long size)
     return 0;
 }
 
+void *krealloc(void *ptr, unsigned long size)
+{
+    struct kheap_block *block;
+    struct kheap_block *next;
+    struct kheap_block *remainder;
+
+    unsigned long need;
+    unsigned long old_payload;
+    unsigned long copy;
+
+    void *new_ptr;
+
+    if (size == 0)
+    {
+        kfree(ptr);
+        return 0;
+    }
+
+    if (ptr == 0)
+        return kmalloc(size);
+
+    block = kheap_block_from_ptr(ptr);
+    if (block == 0)
+        return 0;
+
+    need = kheap_align_up(size + KHEAP_BLOCK_HEADER_SIZE);
+    if (need < KHEAP_MIN_BLOCK_SIZE)
+        need = KHEAP_MIN_BLOCK_SIZE;
+
+    old_payload = kheap_payload_size(block);
+
+    if (need <= block->size)
+    {
+        if (block->size - need >= KHEAP_MIN_BLOCK_SIZE)
+        {
+            remainder = kheap_block_at((unsigned char *)block + need);
+            remainder->size = block->size - need;
+            remainder->free = 1;
+            remainder->next_free = kheap_free_list;
+            kheap_free_list = remainder;
+            block->size = need;
+            kheap_coalesce(remainder);
+        }
+
+        return ptr;
+    }
+
+    next = kheap_next_physical(block);
+    if (next != 0 && next->free && block->size + next->size >= need)
+    {
+        unsigned long combined = block->size + next->size;
+
+        kheap_unlink_free(next);
+        if (combined - need >= KHEAP_MIN_BLOCK_SIZE)
+        {
+            remainder = kheap_block_at((unsigned char *)block + need);
+            remainder->size = combined - need;
+            remainder->free = 1;
+            remainder->next_free = kheap_free_list;
+            kheap_free_list = remainder;
+            block->size = need;
+        }
+        else
+            block->size = combined;
+
+        return ptr;
+    }
+
+    new_ptr = kmalloc(size);
+    if (new_ptr == 0)
+        return 0;
+
+    copy = old_payload < size ? old_payload : size;
+    kmemcpy(new_ptr, ptr, copy);
+    kfree(ptr);
+    return new_ptr;
+}
+
 void *kzalloc(unsigned long size)
 {
     void *ptr;
@@ -197,12 +298,8 @@ void kfree(void *ptr)
     if (ptr == 0)
         return;
 
-    block = kheap_block_at((unsigned char *)ptr - KHEAP_BLOCK_HEADER_SIZE);
-
-    if ((unsigned char *)block < kheap_begin || (unsigned char *)block >= kheap_limit)
-        return;
-
-    if (block->free)
+    block = kheap_block_from_ptr(ptr);
+    if (block == 0)
         return;
 
     block->free = 1;
