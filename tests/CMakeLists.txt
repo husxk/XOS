@@ -18,6 +18,7 @@ set(XOS_KERNEL_LIB_SOURCES
     "${XOS_KERNEL_DIR}/mem/kmem_utils.c"
     "${XOS_KERNEL_DIR}/mem/phys_map.c"
     "${XOS_KERNEL_DIR}/mem/phys_mem.c"
+    "${XOS_KERNEL_DIR}/util/min_heap.c"
 )
 
 add_library(xos_kernel_library STATIC ${XOS_KERNEL_LIB_SOURCES})
@@ -30,6 +31,7 @@ set(XOS_TEST_SOURCES
     mem/kheap-test.cpp
     mem/phys-map-test.cpp
     mem/phys-mem-test.cpp
+    util/min-heap-test.cpp
 )
 
 add_executable(xos_test ${XOS_TEST_SOURCES})
