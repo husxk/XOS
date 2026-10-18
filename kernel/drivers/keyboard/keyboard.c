@@ -1,25 +1,31 @@
 #include "drivers/keyboard/keyboard.h"
 
 #include "drivers/keyboard/ps2/ps2_keyboard.h"
+#include "util/ring_buffer.h"
 
-static volatile keyboard_handler_t kbd_handler;
+#define KBD_RING_CAP 128u
 
-void keyboard_set_handler(keyboard_handler_t handler)
-{
-    kbd_handler = handler;
-}
+static unsigned char kbd_storage[KBD_RING_CAP];
+static ring_buffer_t kbd_ring;
 
 void keyboard_emit(char c)
 {
-    keyboard_handler_t handler = kbd_handler;
+    ring_buffer_put(&kbd_ring, &c);
+}
 
-    if (handler != 0)
-        handler(c);
+int keyboard_getchar(void)
+{
+    char c;
+
+    if (ring_buffer_get(&kbd_ring, &c))
+        return (int)(unsigned char)c;
+
+    return -1;
 }
 
 void keyboard_init(void)
 {
-    kbd_handler = 0;
+    ring_buffer_init(&kbd_ring, kbd_storage, KBD_RING_CAP, sizeof(char));
 
     ps2_keyboard_init();
 }

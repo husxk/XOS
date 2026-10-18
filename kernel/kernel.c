@@ -61,38 +61,6 @@ static void heap_smoke_test(void)
     kprint("heap test: done\n");
 }
 
-static void on_key(char c)
-{
-    vga_putchar(c);
-}
-
-struct demo_kthread_params
-{
-    int id;
-    time_t delay_ms;
-};
-
-static struct demo_kthread_params demo_kthread_a = { 0, (time_t)1000 };
-static struct demo_kthread_params demo_kthread_b = { 1, (time_t)2000 };
-
-static void demo_kthread(void *arg)
-{
-    struct demo_kthread_params *p = arg;
-
-    for (;;)
-    {
-        tick_t ticks_before = ktimer_ticks();
-
-        kprint("kthread demo %d: timeout %u ms, ticks %u\n",
-               p->id, (unsigned int)p->delay_ms, (unsigned int)ticks_before);
-
-        ksleep_ms(p->delay_ms);
-
-        kprint("kthread demo %d: done, ticks %u\n",
-               p->id, (unsigned int)ktimer_ticks());
-    }
-}
-
 static void kernel_init(void)
 {
     kprint_init();
@@ -111,7 +79,6 @@ static void kernel_init(void)
     ktimer_init();
 
     keyboard_init();
-    keyboard_set_handler(on_key);
 
     cpu_enable_interrupts();
 }
@@ -140,11 +107,15 @@ void kernel_main(void)
     phys_mem_print_stats();
     heap_smoke_test();
 
-    if (kthread_create(demo_kthread, &demo_kthread_a) == KTHREAD_ID_NONE)
-        kprint("kthread demo: create 0 failed\n");
+    for (;;)
+    {
+        int c;
 
-    if (kthread_create(demo_kthread, &demo_kthread_b) == KTHREAD_ID_NONE)
-        kprint("kthread demo: create 1 failed\n");
+        while ((c = keyboard_getchar()) >= 0)
+            vga_putchar((char)c);
 
-    kthread_run();
+        tick_t start = ktimer_ticks();
+
+        while ((tick_t)(ktimer_ticks() - start) < 5u);
+    }
 }

@@ -10,22 +10,20 @@
  * anywhere else in the kernel.
  */
 
-/* Consumer of decoded characters. */
-typedef void (*keyboard_handler_t)(char c);
-
 void keyboard_init(void);
-
-/*
- * Installs the consumer. Until one is installed, decoded characters
- * are dropped. Should be called after keyboard_init().
- */
-void keyboard_set_handler(keyboard_handler_t handler);
 
 /*
  * Called by a backend driver once it has decoded a character.
  *
- * Runs in interrupt context, so the installed handler must be short.
- * This is the backend-facing half of the interface, not something the
- * rest of the kernel should call.
+ * Runs in interrupt context: it only enqueues the character into the
+ * input buffer and returns, so the backend never blocks on a consumer.
+ * On a full buffer the character is dropped. This is the backend-facing
+ * half of the interface, not something the rest of the kernel calls.
  */
 void keyboard_emit(char c);
+
+/*
+ * Returns the next buffered character, or -1 when none is available.
+ * Drained outside interrupt context, typically by a consumer thread.
+ */
+int keyboard_getchar(void);
