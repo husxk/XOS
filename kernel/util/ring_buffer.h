@@ -6,11 +6,11 @@
 */
 typedef struct ring_buffer
 {
-    unsigned char        *buf;
-    unsigned int          cap;
-    unsigned int          elem_size;
-    volatile unsigned int head;
-    volatile unsigned int tail;
+    unsigned char *buf;
+    unsigned int  cap;
+    unsigned int  elem_size;
+    unsigned int  head;
+    unsigned int  tail;
 } ring_buffer_t;
 
 #ifdef __cplusplus
