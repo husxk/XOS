@@ -61,6 +61,21 @@ static void heap_smoke_test(void)
     kprint("heap test: done\n");
 }
 
+static void keyboard_consumer(void *arg)
+{
+    (void)arg;
+
+    for (;;)
+    {
+        int c;
+
+        while ((c = keyboard_getchar()) >= 0)
+            vga_putchar((char)c);
+
+        ksleep_ms((time_t)50);
+    }
+}
+
 static void kernel_init(void)
 {
     kprint_init();
@@ -107,15 +122,8 @@ void kernel_main(void)
     phys_mem_print_stats();
     heap_smoke_test();
 
-    for (;;)
-    {
-        int c;
+    if (kthread_create(keyboard_consumer, 0) == KTHREAD_ID_NONE)
+        kprint("keyboard consumer: create failed\n");
 
-        while ((c = keyboard_getchar()) >= 0)
-            vga_putchar((char)c);
-
-        tick_t start = ktimer_ticks();
-
-        while ((tick_t)(ktimer_ticks() - start) < 5u);
-    }
+    kthread_run();
 }
