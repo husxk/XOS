@@ -34,6 +34,7 @@ set(XOS_TEST_SOURCES
     mem/phys-mem-test.cpp
     util/min-heap-test.cpp
     util/ring-buffer-test.cpp
+    support/panic_host.c
 )
 
 add_executable(xos_test ${XOS_TEST_SOURCES})
