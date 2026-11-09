@@ -237,3 +237,16 @@ TEST_F(RingBufferTest, FullAndEmptyFlagsAtBoundaries)
 
     EXPECT_TRUE(ring_buffer_is_full(&rb));
 }
+
+TEST(RingBufferDeathTest, RejectsInvalidArguments)
+{
+    alignas(8) unsigned char storage[StorageBytes];
+    ring_buffer_t rb;
+
+    EXPECT_DEATH(ring_buffer_init(&rb, storage, 0u, sizeof(int)), "assertion failed");
+    EXPECT_DEATH(ring_buffer_init(&rb, storage, 1u, sizeof(int)), "assertion failed");
+
+    EXPECT_DEATH(ring_buffer_init(&rb, nullptr, 8u, sizeof(int)), "assertion failed");
+
+    EXPECT_DEATH(ring_buffer_init(&rb, storage, 8u, 0u), "assertion failed");
+}

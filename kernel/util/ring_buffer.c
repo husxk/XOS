@@ -2,10 +2,15 @@
 
 #include "cpu/atomic.h"
 #include "mem/kmem_utils.h"
+#include "panic.h"
 
 void ring_buffer_init(ring_buffer_t *rb, void *storage, unsigned int capacity,
                       unsigned int elem_size)
 {
+    kassert(capacity >= 2);
+    kassert(storage != 0);
+    kassert(elem_size != 0);
+
     rb->buf = storage;
     rb->cap = capacity;
     rb->elem_size = elem_size;
