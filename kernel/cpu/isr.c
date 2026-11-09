@@ -4,6 +4,7 @@
 #include "cpu/irq.h"
 #include "cpu/pic.h"
 #include "log/kprint.h"
+#include "panic.h"
 
 extern void (*isr_stub_table[])(void);
 
@@ -74,7 +75,7 @@ static void kernel_panic(interrupt_frame_t *frame)
 {
     unsigned int cr2;
 
-    kputs("\n*** KERNEL PANIC ***\n");
+    panic_begin();
 
     kprint("vector 0x%08x ", frame->int_no);
 
@@ -93,8 +94,7 @@ static void kernel_panic(interrupt_frame_t *frame)
         kprint("cr2 0x%08x\n", cr2);
     }
 
-    for (;;)
-        __asm__ volatile("cli; hlt" ::: "memory");
+    panic_halt();
 }
 
 static void isr_default_handler(interrupt_frame_t *frame)
