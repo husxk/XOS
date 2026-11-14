@@ -24,6 +24,22 @@ Run the image on the host (requires QEMU with curses):
 ./scripts/run-qemu.sh
 ```
 
+## Testing
+
+Host unit tests (**GoogleTest**, host `gcc`, no cross toolchain). Default dir `build-tests/` (`XOS_TEST_BUILD_DIR`); extra args pass through to `ctest`.
+
+```bash
+./scripts/build.sh --tests
+./scripts/run-test.sh            # e.g. -R RingBuffer
+```
+
+**Sanitizers** (`--sanitize`, dir `build-san/`) rebuild the suite under ThreadSanitizer + UBSan. TSan runs the SPSC ring-buffer stress test under the C++ memory model — on x86 relaxed and acquire/release compile identically, so only TSan would catch a weakened order in `put`/`get`. UBSan catches signed overflow, out-of-bounds and bad shifts. The plain `--tests` build stays uninstrumented.
+
+```bash
+./scripts/build.sh --sanitize    # implies --tests
+./scripts/run-test.sh --sanitize
+```
+
 ## Docker
 
 Cross-build environment: Ubuntu 24.04 with **i686-elf GCC** (built during image build), **nasm**, and **cmake**. The repo is bind-mounted at **`/work`** when you use `docker-run.sh`.

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Configure and build XOS with CMake, or host unit tests with --tests.
+# Add --sanitize to build the tests under ThreadSanitizer + UBSan (runs the
+# concurrency stress test under TSan); implies --tests.
 
 set -euo pipefail
 
@@ -9,25 +11,41 @@ TOOLCHAIN="${ROOT}/cmake/i686-elf-toolchain.cmake"
 CROSS_PREFIX="${XOS_CROSS_PREFIX:-i686-elf}"
 
 BUILD_TESTS=0
+SANITIZE=0
 BUILD_ARGS=()
 
 for arg in "$@"; do
-  if [[ "$arg" == "--tests" ]]; then
-    BUILD_TESTS=1
-  else
-    BUILD_ARGS+=("$arg")
-  fi
+  case "$arg" in
+    --tests)    BUILD_TESTS=1 ;;
+    --sanitize) SANITIZE=1 ;;
+    *)          BUILD_ARGS+=("$arg") ;;
+  esac
 done
 
-if [[ "$BUILD_TESTS" -eq 1 ]]; then
-  TEST_BUILD_DIR="${XOS_TEST_BUILD_DIR:-build-tests}"
+# --sanitize builds the test suite, so it implies --tests.
+if [[ "$SANITIZE" -eq 1 ]]; then
+  BUILD_TESTS=1
+fi
 
-  cmake -S "${ROOT}/tests" -B "${ROOT}/${TEST_BUILD_DIR}"
+if [[ "$BUILD_TESTS" -eq 1 ]]; then
+  CMAKE_TEST_ARGS=()
+  if [[ "$SANITIZE" -eq 1 ]]; then
+    TEST_BUILD_DIR="${XOS_SAN_BUILD_DIR:-build-san}"
+    CMAKE_TEST_ARGS+=(-DXOS_SANITIZE=ON)
+  else
+    TEST_BUILD_DIR="${XOS_TEST_BUILD_DIR:-build-tests}"
+  fi
+
+  cmake -S "${ROOT}/tests" -B "${ROOT}/${TEST_BUILD_DIR}" "${CMAKE_TEST_ARGS[@]}"
   cmake --build "${ROOT}/${TEST_BUILD_DIR}" "${BUILD_ARGS[@]}"
 
   echo -ne "\n\n"
   echo "Built host tests: ${ROOT}/${TEST_BUILD_DIR}"
-  echo "  Run: ./scripts/run-test.sh"
+  if [[ "$SANITIZE" -eq 1 ]]; then
+    echo "  Run: ./scripts/run-test.sh --sanitize"
+  else
+    echo "  Run: ./scripts/run-test.sh"
+  fi
   echo -ne "\n"
   exit 0
 fi
