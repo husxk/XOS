@@ -40,6 +40,12 @@ Host unit tests (**GoogleTest**, host `gcc`, no cross toolchain). Default dir `b
 ./scripts/run-test.sh --sanitize
 ```
 
+**Soak** (`--soak <seconds>`) runs a standalone long-running SPSC producer/consumer app (no GoogleTest, not part of `ctest`) for that many seconds (`0` = forever) or until an invariant breaks. Most valuable combined with `--sanitize`.
+
+```bash
+./scripts/run-test.sh --soak 0 --sanitize    # soak forever under TSan+UBSan
+```
+
 ## Docker
 
 Cross-build environment: Ubuntu 24.04 with **i686-elf GCC** (built during image build), **nasm**, and **cmake**. The repo is bind-mounted at **`/work`** when you use `docker-run.sh`.
