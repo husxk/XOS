@@ -46,15 +46,29 @@ target_link_libraries(xos_test PRIVATE xos_kernel_library GTest::gtest_main)
 
 gtest_discover_tests(xos_test)
 
+# Standalone SPSC soak app: a long-running producer/consumer harness with no
+# gtest, not registered with ctest -- run it by hand and let it soak. Defined
+# before the sanitizer block so it is instrumented too; soak under TSan is where
+# it earns its keep.
+find_package(Threads REQUIRED)
+
+add_executable(xos_soak_test
+    soak-tests/ring-buffer-soak-test.cpp
+    support/panic_host.c
+)
+
+target_link_libraries(xos_soak_test PRIVATE xos_kernel_library Threads::Threads)
+
 # Sanitizer build (opt-in): cmake -S tests -B build-san -DXOS_SANITIZE=ON
-# Instruments the test binary and the shared kernel sources it links with both
+# Instruments the test binaries and the shared kernel sources they link with both
 # ThreadSanitizer and UndefinedBehaviorSanitizer. UBSan catches signed overflow,
 # out-of-bounds, misaligned access and bad shifts; its -fno-sanitize-recover makes
 # any UB an immediate nonzero exit, not a warning the run ignores. The plain --tests
-# build stays uninstrumented and fast.
+# build stays uninstrumented and fast. The whole program must be instrumented, so
+# every linked target carries the flag.
 option(XOS_SANITIZE "Instrument host tests with ThreadSanitizer + UBSan" OFF)
 if(XOS_SANITIZE)
-    foreach(t xos_kernel_library xos_test)
+    foreach(t xos_kernel_library xos_test xos_soak_test)
         target_compile_options(${t} PRIVATE
             -fsanitize=thread,undefined -fno-sanitize-recover=undefined -g -O1)
         target_link_options(${t} PRIVATE -fsanitize=thread,undefined)
